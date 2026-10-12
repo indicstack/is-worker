@@ -1,6 +1,6 @@
-# Using IndicStack with `/is:worker` — the complete guide
+# Using IndicStack with `/is-worker` — the complete guide
 
-`/is:worker` is a Claude Code plugin. You describe an app or attach a PRD; Claude plans and reviews, IndicStack's Qwen model writes every piece of code, and scripts check every answer. At the end of each milestone you get a one-row table of tokens, rupees, tests and time, plus a way to try what was built.
+`/is-worker` is a Claude Code plugin. You describe an app or attach a PRD; Claude plans and reviews, IndicStack's Qwen model writes every piece of code, and scripts check every answer. At the end of each milestone you get a one-row table of tokens, rupees, tests and time, plus a way to try what was built.
 
 Works on Mac and Windows, in the Claude Code CLI and the Claude desktop app.
 
@@ -24,7 +24,7 @@ Then sign in at **https://console.indicstack.ai/login** with that email and pass
 
 In the console:
 
-1. Every new account starts with **₹2,000 of free credit**, so you can run your first milestones without paying anything. After that, add prepaid credit in rupees with a GST invoice.
+1. Every new account starts with **₹2,000 of free credit**, with no credit card or payment details needed, so you can run your first milestones without paying anything. After that, add prepaid credit in rupees with a GST invoice.
 2. Pricing for the worker model, as of October 2026:
 
    | Model | Input price | Output price |
@@ -38,40 +38,40 @@ In the console:
 
 ## 3. Install Claude Code
 
-Follow https://code.claude.com/docs/en/overview for the CLI, or install the Claude desktop app and open its Code tab. Sign in with your Claude account. Node.js is needed too, but `/is:worker` installs it for you in step 5 if it is missing.
+Follow https://code.claude.com/docs/en/overview for the CLI, or install the Claude desktop app and open its Code tab. Sign in with your Claude account. Node.js is needed too, but `/is-worker` installs it for you in step 5 if it is missing.
 
 ## 4. Install the plugin
 
 Inside Claude Code, run these two commands one after the other:
 
 ```
-/plugin marketplace add IndicStack/pwris-model
+/plugin marketplace add IndicStack/is-worker
 ```
 ```
-/plugin install is@indicstack
+/plugin install is-worker@indicstack
 ```
 
 ![The plugin repository on GitHub](img/04-plugin-repo.jpg)
 
-If you installed the older name `pwris@indicstack` before 12 October 2026, uninstall it first: `/plugin uninstall pwris@indicstack`.
+If you installed an older name (`pwris@indicstack` or `is@indicstack`) before 12 October 2026, uninstall it first and re-add the marketplace: `/plugin uninstall is@indicstack`, `/plugin marketplace remove indicstack`, then the two commands above.
 
 ## 5. First run: connect
 
 Open the folder of your project (new or existing) in Claude Code and type:
 
 ```
-/is:worker
+/is-worker
 ```
 
 The first thing it does is a connection check. You will see one of these lines:
 
 | Line | Meaning | What happens next |
 |---|---|---|
-| `PWRIS: READY` | Node, the claude command and your IndicStack key all work | It continues |
-| `PWRIS: NOT CONNECTED — no IndicStack key` | No key saved yet | It opens a hidden key prompt for you (see below) |
-| `PWRIS: NOT CONNECTED — IndicStack rejected the key` | Wrong or expired key | Same prompt; paste the correct key |
-| `PWRIS: NOT CONNECTED — unreachable` | Network or IndicStack is down | Check your network, or email welcome@indicstack.ai |
-| `PWRIS: DEGRADED` | The `claude` command is not on the PATH | Runs work; the blind review is skipped until fixed |
+| `IS-WORKER: READY` | Node, the claude command and your IndicStack key all work | It continues |
+| `IS-WORKER: NOT CONNECTED — no IndicStack key` | No key saved yet | It opens a hidden key prompt for you (see below) |
+| `IS-WORKER: NOT CONNECTED — IndicStack rejected the key` | Wrong or expired key | Same prompt; paste the correct key |
+| `IS-WORKER: NOT CONNECTED — unreachable` | Network or IndicStack is down | Check your network, or email welcome@indicstack.ai |
+| `IS-WORKER: DEGRADED` | The `claude` command is not on the PATH | Runs work; the blind review is skipped until fixed |
 
 If Node is missing, it installs it (winget on Windows, Homebrew on Mac) and asks you to restart Claude Code once.
 
@@ -87,10 +87,10 @@ Claude will not plan or write code until this says READY. That is deliberate: it
 
 ## 6. Describe your app
 
-Type `/is:worker` followed by your idea, as messy as you like, or attach a PRD:
+Type `/is-worker` followed by your idea, as messy as you like, or attach a PRD:
 
 ```
-/is:worker @MyApp_PRD.docx
+/is-worker @MyApp_PRD.docx
 ```
 
 What follows, in order:
@@ -134,8 +134,8 @@ your-project/
 
 ## 9. Troubleshooting
 
-- **The command shows as `/is-worker` on Windows.** Same command; Windows displays the colon as a hyphen. Both work.
-- **NOT CONNECTED after saving the key.** Run the check yourself: `node "<plugin folder>/scripts/pwris.mjs" doctor`. A `length` far from your key's real length means a paste error.
+- **The command shows as `/is-worker:is-worker` or `/is-worker-is-worker`.** That is the plugin's full name (plugin:skill). The short form `/is-worker` works too.
+- **NOT CONNECTED after saving the key.** Run the check yourself: `node "<plugin folder>/scripts/is-worker.mjs" doctor`. A `length` far from your key's real length means a paste error.
 - **IndicStack is slow or times out.** The harness waits up to 60 s for the first token and retries once. If it keeps happening, email welcome@indicstack.ai; GPUs are sometimes taken offline for maintenance.
 - **A ticket went to the queue.** Claude writes that one ticket and submits it through the same checker. Everything else stays with IndicStack.
 - **Python or pip errors.** Nothing here uses Python. If you see such errors they come from your project, not the plugin.

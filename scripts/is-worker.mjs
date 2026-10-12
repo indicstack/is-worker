@@ -1,5 +1,5 @@
-// /pwris orchestrator: IndicStack-only planner-worker-reviewer for any project.
-//   node scripts/pwris.mjs <cmd> --project <dir> [...]
+// /is-worker orchestrator: IndicStack-only planner-worker-reviewer for any project.
+//   node scripts/is-worker.mjs <cmd> --project <dir> [...]
 //   cmds: doctor | status | preflight | run | review | table [--rate INR_PER_USD]
 //   doctor exit codes: 0 ready, 3 key missing, 4 key rejected by IndicStack, 5 IndicStack unreachable, 6 claude CLI not found
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
@@ -55,11 +55,11 @@ async function doctor() {
   }
   const probe = readJson(resolve(pwr, "state", "probe-A.json"));
   lines.push(`probe: ${probe ? `window ${probe.context_window} (${probe.at.slice(0, 16)})` : "none yet (preflight runs it)"}`);
-  const banner = code === 0 ? "PWRIS: READY — IndicStack connected; the worker will write the code."
-    : code === 3 ? "PWRIS: NOT CONNECTED — no IndicStack key. Nothing may be planned or coded until it is saved."
-    : code === 4 ? "PWRIS: NOT CONNECTED — IndicStack rejected the key. Save the correct key before anything else."
-    : code === 5 ? "PWRIS: NOT CONNECTED — IndicStack unreachable. Check the network or ask ops; do not fall back to Claude writing the code."
-    : "PWRIS: DEGRADED — claude CLI not found; runs work, blind reviews will not.";
+  const banner = code === 0 ? "IS-WORKER: READY — IndicStack connected; the worker will write the code."
+    : code === 3 ? "IS-WORKER: NOT CONNECTED — no IndicStack key. Nothing may be planned or coded until it is saved."
+    : code === 4 ? "IS-WORKER: NOT CONNECTED — IndicStack rejected the key. Save the correct key before anything else."
+    : code === 5 ? "IS-WORKER: NOT CONNECTED — IndicStack unreachable. Check the network or ask ops; do not fall back to Claude writing the code."
+    : "IS-WORKER: DEGRADED — claude CLI not found; runs work, blind reviews will not.";
   say(banner); for (const l of lines) say("  " + l);
   if (code === 3 || code === 4) say(`\nTo save the key, run this in your own terminal (hidden input), then say "saved":\n  node "${resolve(HOME, "scripts", "key.mjs")}"`);
   process.exit(code);
@@ -80,7 +80,7 @@ async function status() {
 }
 
 async function requireConnected() {
-  const r = node("scripts/pwris.mjs", ["doctor", "--project", project], { quiet: true });
+  const r = node("scripts/is-worker.mjs", ["doctor", "--project", project], { quiet: true });
   process.stdout.write(r.stdout || "");
   if (r.status !== 0 && r.status !== 6) die(`refusing to continue: not connected (doctor exit ${r.status})`);
 }
@@ -173,5 +173,5 @@ async function table() {
 }
 
 const cmds = { doctor, status, preflight, run, review, table };
-if (!cmds[cmd]) die("usage: node scripts/pwris.mjs doctor|status|preflight|run|review|table --project <dir>");
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs doctor|status|preflight|run|review|table --project <dir>");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));

@@ -1,13 +1,13 @@
 {
-  "name": "is",
-  "displayName": "IndicStack worker: planner-worker-reviewer on IndicStack",
-  "version": "0.4.0",
-  "description": "Build features with Claude planning and reviewing while IndicStack's Qwen model writes every ticket; scripts check every answer. Command: /is:worker. Ends with a one-row rupee cost/time table.",
+  "name": "is-worker",
+  "displayName": "IndicStack worker (/is-worker)",
+  "version": "0.5.0",
+  "description": "Build features with Claude planning and reviewing while IndicStack's Qwen model writes every ticket; scripts check every answer. Command: /is-worker. Ends with a one-row rupee cost/time table.",
   "author": {
     "name": "IndicStack",
     "email": "hariesh.ramanathan@indicstack.ai"
   },
-  "repository": "https://github.com/IndicStack/pwris-model",
+  "repository": "https://github.com/IndicStack/is-worker",
   "license": "UNLICENSED",
   "keywords": [
     "indicstack",

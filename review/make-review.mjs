@@ -54,7 +54,7 @@ const sha = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
 if (sha(resolve(dir, "PROMPT-REVIEW.md")) !== sha(resolve(ROOT, "review/PROMPT-REVIEW.md"))) { console.error("PROMPT-REVIEW.md copy differs"); process.exit(1); }
 
 // leak scan: model, vendor and project names must not appear in the review folder
-const LEAK = /qwen|indicstack|openrouter|opus|claude|anthropic|pwr-bench|pwris|calibrat|worker|planner/i;
+const LEAK = /qwen|indicstack|openrouter|opus|claude|anthropic|pwr-bench|is-worker|calibrat|worker|planner/i;
 const leaks = [];
 for (const f of readdirSync(dir)) { const t = readFileSync(resolve(dir, f), "utf8"); t.split("\n").forEach((line, i) => { if (f !== "PROMPT-REVIEW.md" && LEAK.test(line)) leaks.push(`${f}:${i + 1}: ${line.slice(0, 120)}`); }); }
 updateMeta(runDir, { reviewFolder: dir, reviewPromptSha256: sha(resolve(dir, "PROMPT-REVIEW.md")) });

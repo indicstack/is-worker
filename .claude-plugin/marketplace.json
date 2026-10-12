@@ -7,9 +7,9 @@
   "description": "IndicStack tools for Claude Code",
   "plugins": [
     {
-      "name": "is",
+      "name": "is-worker",
       "source": "./",
-      "description": "IndicStack worker (/is:worker): Claude plans and reviews, Qwen on IndicStack writes every ticket, scripts check every answer.",
+      "description": "IndicStack worker (/is-worker): Claude plans and reviews, Qwen on IndicStack writes every ticket, scripts check every answer.",
       "category": "productivity",
       "tags": [
         "indicstack",
