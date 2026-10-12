@@ -1,0 +1,140 @@
+# Using IndicStack with `/is:worker` — the complete guide
+
+`/is:worker` is a Claude Code plugin. You describe an app or attach a PRD; Claude plans and reviews, IndicStack's Qwen model writes every piece of code, and scripts check every answer. At the end of each milestone you get a one-row table of tokens, rupees, tests and time, plus a way to try what was built.
+
+Works on Mac and Windows, in the Claude Code CLI and the Claude desktop app.
+
+---
+
+## 1. Create your IndicStack account
+
+Open **https://console.indicstack.ai/signup**.
+
+![IndicStack sign-up page](img/01-signup.jpg)
+
+1. Fill in work email, full name, company or institution, and a password of at least 12 characters.
+2. Tick "I'm not a robot" and accept the Terms.
+3. Press **Create account**. IndicStack emails you a confirmation link; the account opens once you click it.
+
+Then sign in at **https://console.indicstack.ai/login** with that email and password.
+
+![IndicStack sign-in page](img/02-signin.jpg)
+
+## 2. Add credit and create an API key
+
+In the console:
+
+1. Add prepaid credit (rupees, GST invoice). A first milestone of 10 to 15 tickets costs about ₹10 on the worker side, so a small top-up goes a long way.
+2. Open **API keys** and create a key. Copy it once and keep it somewhere safe such as a password manager. You will paste it into a hidden terminal prompt in step 5, never into a chat.
+
+> Owner note: add a screenshot of the API keys page here as `img/03-api-key.jpg` once logged in.
+
+## 3. Install Claude Code
+
+Follow https://code.claude.com/docs/en/overview for the CLI, or install the Claude desktop app and open its Code tab. Sign in with your Claude account. Node.js is needed too, but `/is:worker` installs it for you in step 5 if it is missing.
+
+## 4. Install the plugin
+
+Inside Claude Code, run these two commands one after the other:
+
+```
+/plugin marketplace add IndicStack/pwris-model
+```
+```
+/plugin install is@indicstack
+```
+
+![The plugin repository on GitHub](img/04-plugin-repo.jpg)
+
+If you installed the older name `pwris@indicstack` before 12 October 2026, uninstall it first: `/plugin uninstall pwris@indicstack`.
+
+## 5. First run: connect
+
+Open the folder of your project (new or existing) in Claude Code and type:
+
+```
+/is:worker
+```
+
+The first thing it does is a connection check. You will see one of these lines:
+
+| Line | Meaning | What happens next |
+|---|---|---|
+| `PWRIS: READY` | Node, the claude command and your IndicStack key all work | It continues |
+| `PWRIS: NOT CONNECTED — no IndicStack key` | No key saved yet | It opens a hidden key prompt for you (see below) |
+| `PWRIS: NOT CONNECTED — IndicStack rejected the key` | Wrong or expired key | Same prompt; paste the correct key |
+| `PWRIS: NOT CONNECTED — unreachable` | Network or IndicStack is down | Check your network, or email welcome@indicstack.ai |
+| `PWRIS: DEGRADED` | The `claude` command is not on the PATH | Runs work; the blind review is skipped until fixed |
+
+If Node is missing, it installs it (winget on Windows, Homebrew on Mac) and asks you to restart Claude Code once.
+
+**The key prompt.** In the desktop app, Claude opens the Terminal panel and runs the key command there. In the CLI, it prints the command for you to run in a second terminal window:
+
+```
+node "<plugin folder>/scripts/key.mjs"
+```
+
+Paste your IndicStack key when asked. Typing is hidden. The key is saved to `~/.pwr/keys.env` with owner-only permissions, and never appears in chat or logs. Say **saved**, and the check runs again.
+
+Claude will not plan or write code until this says READY. That is deliberate: it stops the silent failure where Claude quietly does all the work itself.
+
+## 6. Describe your app
+
+Type `/is:worker` followed by your idea, as messy as you like, or attach a PRD:
+
+```
+/is:worker @MyApp_PRD.docx
+```
+
+What follows, in order:
+
+1. **Questions** (at most five), only the ones a PRD doesn't already answer.
+2. **Brief**: a plain-words spec with numbered rules. You say "ok to freeze"; it is then hashed and cannot change silently.
+3. **Milestones and tickets**: one PR per milestone, 4 to 15 small tickets each, every ticket with its test written before any code.
+4. **Your go**: the ticket list and a rupee estimate. Say "go".
+5. **The run**: IndicStack writes each ticket; scripts check paths, syntax, the ticket's test and all earlier tests. A failed ticket is retried once with the error, then handed to Claude for that one ticket only.
+6. **Blind review**: a fresh Claude session, in an isolated folder, judges the code without knowing who wrote it.
+7. **The table** and a link or command to try the result.
+
+Say **next** for the next milestone, or **status** at any time for a one-line summary.
+
+## 7. Reading the table
+
+| Column | Meaning |
+|---|---|
+| Worker tokens in/out, worker cost | What IndicStack used and billed, in rupees |
+| Opus review tokens, review cost | The blind review session, converted to rupees at the day's rate |
+| First try | Tickets that passed without a retry |
+| Final tests | All tests across all tickets, after the last ticket |
+| Findings | Logic findings the blind reviewer raised |
+| Total cost, total time | Worker plus review |
+
+From real runs in October 2026: a 15-ticket milestone cost about ₹9 on IndicStack and about ₹75 for the Opus review. The review is the expensive part; the typing is nearly free.
+
+## 8. Where things live
+
+```
+your-project/
+  .pwr/
+    BRIEF.md          the frozen spec
+    tickets.jsonl     the tickets
+    tests/            one test per ticket
+    runs/<date>/      every call, every output, never overwritten
+    state/            probe, self-calibration
+  src/ ...            the code IndicStack wrote, in your tree
+```
+`.pwr/runs/` and `.pwr/state/` are added to `.gitignore` automatically.
+
+## 9. Troubleshooting
+
+- **The command shows as `/is-worker` on Windows.** Same command; Windows displays the colon as a hyphen. Both work.
+- **NOT CONNECTED after saving the key.** Run the check yourself: `node "<plugin folder>/scripts/pwris.mjs" doctor`. A `length` far from your key's real length means a paste error.
+- **IndicStack is slow or times out.** The harness waits up to 60 s for the first token and retries once. If it keeps happening, email welcome@indicstack.ai; GPUs are sometimes taken offline for maintenance.
+- **A ticket went to the queue.** Claude writes that one ticket and submits it through the same checker. Everything else stays with IndicStack.
+- **Python or pip errors.** Nothing here uses Python. If you see such errors they come from your project, not the plugin.
+
+## 10. Keeping it updated
+
+```
+/plugin update is@indicstack
+```

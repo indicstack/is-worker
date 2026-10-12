@@ -18,6 +18,10 @@ Check the connection yourself any time:
 node "<plugin folder>/scripts/pwris.mjs" doctor
 ```
 
+## Guide
+
+Step-by-step with screenshots, from sign-up to the first table: [docs/USER-GUIDE.md](docs/USER-GUIDE.md).
+
 ## Workflow
 
 ![workflow](docs/workflow.svg)
