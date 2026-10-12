@@ -1,61 +1,70 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="820" height="700" viewBox="0 0 820 700" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13">
-  <title>/pwris workflow</title>
-  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#5f5e5a" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
-  <rect width="820" height="700" fill="#ffffff"/>
-  <text x="410" y="30" text-anchor="middle" font-size="16" font-weight="600" fill="#1b1b1b">/pwris: from prompt to table</text>
-  <text x="410" y="48" text-anchor="middle" fill="#6b7076">Claude plans and judges · IndicStack Qwen types · scripts check</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="760" viewBox="0 0 860 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" font-size="13">
+  <title>/pwris on indicstack.ai: how it works</title>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#6b7076" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+  <rect width="860" height="760" fill="#f5f5f2"/>
+  <!-- header band -->
+  <rect x="0" y="0" width="860" height="72" fill="#0a0c0d"/>
+  <rect x="0" y="72" width="860" height="3" fill="#ff6602"/>
+  <text x="32" y="32" font-size="11" fill="#6b7076" font-family="'JetBrains Mono', Menlo, monospace" letter-spacing="1.5">INTERNAL GUIDE · PWRIS PLUGIN · OCTOBER 2026</text>
+  <text x="32" y="56" font-size="20" font-weight="700" fill="#ffffff" letter-spacing="-0.3">/pwris: how it works, from prompt to table</text>
+  <text x="828" y="46" text-anchor="end" font-size="15" font-weight="600" fill="#ffffff">Indic Stack<tspan fill="#ff6602">.ai</tspan></text>
 
   <!-- legend -->
-  <rect x="40" y="62" width="12" height="12" fill="#eeedfe" stroke="#534ab7"/><text x="58" y="73" fill="#3c3489">Claude (your session)</text>
-  <rect x="220" y="62" width="12" height="12" fill="#e1f5ee" stroke="#0f6e56"/><text x="238" y="73" fill="#085041">Scripts (no model)</text>
-  <rect x="380" y="62" width="12" height="12" fill="#faece7" stroke="#993c1d"/><text x="398" y="73" fill="#712b13">IndicStack worker</text>
-  <rect x="540" y="62" width="12" height="12" fill="#fbeaf0" stroke="#993556"/><text x="558" y="73" fill="#72243e">Fresh Claude (blind)</text>
+  <rect x="32" y="92" width="12" height="12" rx="2" fill="#ffffff" stroke="#2b2e33"/><text x="50" y="103" fill="#2b2e33">Claude, your session (plans, judges)</text>
+  <rect x="282" y="92" width="12" height="12" rx="2" fill="#fff1e6" stroke="#ff6602"/><text x="300" y="103" fill="#b84500">indicstack.ai (writes every ticket)</text>
+  <rect x="528" y="92" width="12" height="12" rx="2" fill="#e6e6e3" stroke="#6b7076"/><text x="546" y="103" fill="#2b2e33">Scripts, no model</text>
+  <rect x="680" y="92" width="12" height="12" rx="2" fill="#ffffff" stroke="#2b2e33" stroke-dasharray="3 2"/><text x="698" y="103" fill="#2b2e33">Fresh Claude, blind</text>
 
   <!-- row 1 -->
-  <g><rect x="40" y="100" width="170" height="56" rx="8" fill="#eeedfe" stroke="#534ab7" stroke-width="0.8"/><text x="125" y="123" text-anchor="middle" font-weight="600" fill="#3c3489">1. You type /pwris</text><text x="125" y="142" text-anchor="middle" fill="#534ab7">idea or PRD attached</text></g>
-  <line x1="210" y1="128" x2="258" y2="128" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="262" y="100" width="170" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.8"/><text x="347" y="123" text-anchor="middle" font-weight="600" fill="#085041">2. doctor</text><text x="347" y="142" text-anchor="middle" fill="#0f6e56">Node, claude, key, API</text></g>
-  <line x1="432" y1="128" x2="480" y2="128" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="484" y="100" width="170" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.8"/><text x="569" y="123" text-anchor="middle" font-weight="600" fill="#085041">READY?</text><text x="569" y="142" text-anchor="middle" fill="#0f6e56">no → key prompt, stop</text></g>
-  <line x1="654" y1="128" x2="702" y2="128" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="706" y="100" width="90" height="56" rx="8" fill="#f1efe8" stroke="#888780" stroke-width="0.8"/><text x="751" y="123" text-anchor="middle" font-weight="600" fill="#2c2c2a">status</text><text x="751" y="142" text-anchor="middle" fill="#5f5e5a">resume?</text></g>
+  <g><rect x="32" y="126" width="180" height="60" rx="6" fill="#ffffff" stroke="#2b2e33" stroke-width="0.8"/><text x="122" y="150" text-anchor="middle" font-weight="600" fill="#0b0c0e">1. You type /pwris</text><text x="122" y="170" text-anchor="middle" fill="#6b7076">an idea, or a PRD attached</text></g>
+  <line x1="212" y1="156" x2="256" y2="156" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="260" y="126" width="180" height="60" rx="6" fill="#fff1e6" stroke="#ff6602" stroke-width="0.8"/><text x="350" y="146" text-anchor="middle" font-weight="600" fill="#b84500">2. doctor</text><text x="350" y="163" text-anchor="middle" fill="#b84500">key → api.indicstack.ai</text><text x="350" y="178" text-anchor="middle" font-size="10" fill="#b84500" font-family="'JetBrains Mono', Menlo, monospace" letter-spacing="1">READY · NOT CONNECTED</text></g>
+  <line x1="440" y1="156" x2="484" y2="156" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="488" y="126" width="180" height="60" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="578" y="150" text-anchor="middle" font-weight="600" fill="#0b0c0e">Not connected?</text><text x="578" y="170" text-anchor="middle" fill="#2b2e33">hidden key prompt, then stop</text></g>
+  <line x1="668" y1="156" x2="712" y2="156" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="716" y="126" width="112" height="60" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="772" y="150" text-anchor="middle" font-weight="600" fill="#0b0c0e">status</text><text x="772" y="170" text-anchor="middle" fill="#2b2e33">resume a run?</text></g>
 
-  <!-- row 2 (right to left connector) -->
-  <path d="M751 156 L751 180 L125 180 L125 200" fill="none" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="40" y="204" width="170" height="56" rx="8" fill="#eeedfe" stroke="#534ab7" stroke-width="0.8"/><text x="125" y="227" text-anchor="middle" font-weight="600" fill="#3c3489">3. Questions (≤5)</text><text x="125" y="246" text-anchor="middle" fill="#534ab7">skipped if PRD answers</text></g>
-  <line x1="210" y1="232" x2="258" y2="232" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="262" y="204" width="170" height="56" rx="8" fill="#eeedfe" stroke="#534ab7" stroke-width="0.8"/><text x="347" y="227" text-anchor="middle" font-weight="600" fill="#3c3489">4. Brief → frozen</text><text x="347" y="246" text-anchor="middle" fill="#534ab7">rules, constants, hash</text></g>
-  <line x1="432" y1="232" x2="480" y2="232" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="484" y="204" width="170" height="56" rx="8" fill="#eeedfe" stroke="#534ab7" stroke-width="0.8"/><text x="569" y="227" text-anchor="middle" font-weight="600" fill="#3c3489">5. Tickets + tests</text><text x="569" y="246" text-anchor="middle" fill="#534ab7">tests before any code</text></g>
-  <line x1="654" y1="232" x2="702" y2="232" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="706" y="204" width="90" height="56" rx="8" fill="#f1efe8" stroke="#888780" stroke-width="0.8"/><text x="751" y="227" text-anchor="middle" font-weight="600" fill="#2c2c2a">your go</text><text x="751" y="246" text-anchor="middle" fill="#5f5e5a">cost shown</text></g>
+  <!-- row 2 -->
+  <path d="M772 186 L772 210 L122 210 L122 230" fill="none" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="32" y="234" width="180" height="60" rx="6" fill="#ffffff" stroke="#2b2e33" stroke-width="0.8"/><text x="122" y="258" text-anchor="middle" font-weight="600" fill="#0b0c0e">3. Questions, at most 5</text><text x="122" y="278" text-anchor="middle" fill="#6b7076">skipped if the PRD answers</text></g>
+  <line x1="212" y1="264" x2="256" y2="264" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="260" y="234" width="180" height="60" rx="6" fill="#ffffff" stroke="#2b2e33" stroke-width="0.8"/><text x="350" y="258" text-anchor="middle" font-weight="600" fill="#0b0c0e">4. Brief, then frozen</text><text x="350" y="278" text-anchor="middle" fill="#6b7076">rules, constants, SHA-256</text></g>
+  <line x1="440" y1="264" x2="484" y2="264" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="488" y="234" width="180" height="60" rx="6" fill="#ffffff" stroke="#2b2e33" stroke-width="0.8"/><text x="578" y="258" text-anchor="middle" font-weight="600" fill="#0b0c0e">5. Tickets and tests</text><text x="578" y="278" text-anchor="middle" fill="#6b7076">every test before any code</text></g>
+  <line x1="668" y1="264" x2="712" y2="264" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="716" y="234" width="112" height="60" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="772" y="258" text-anchor="middle" font-weight="600" fill="#0b0c0e">Your go</text><text x="772" y="278" text-anchor="middle" fill="#2b2e33">₹ estimate shown</text></g>
 
-  <!-- row 3: the ticket loop -->
-  <path d="M751 260 L751 284 L125 284 L125 304" fill="none" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <rect x="40" y="308" width="756" height="170" rx="12" fill="none" stroke="#b4b2a9" stroke-dasharray="4 3"/>
-  <text x="56" y="328" fill="#5f5e5a" font-weight="600">6. For each ticket (worker.mjs)</text>
-  <g><rect x="56" y="344" width="150" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.8"/><text x="131" y="367" text-anchor="middle" font-weight="600" fill="#085041">Build prompt</text><text x="131" y="386" text-anchor="middle" fill="#0f6e56">brief + files + test</text></g>
-  <line x1="206" y1="372" x2="244" y2="372" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="248" y="344" width="150" height="56" rx="8" fill="#faece7" stroke="#993c1d" stroke-width="0.8"/><text x="323" y="367" text-anchor="middle" font-weight="600" fill="#712b13">Qwen writes files</text><text x="323" y="386" text-anchor="middle" fill="#993c1d">JSON, thinking off</text></g>
-  <line x1="398" y1="372" x2="436" y2="372" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="440" y="344" width="150" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.8"/><text x="515" y="367" text-anchor="middle" font-weight="600" fill="#085041">check.mjs</text><text x="515" y="386" text-anchor="middle" fill="#0f6e56">paths, syntax, tests</text></g>
-  <line x1="590" y1="372" x2="628" y2="372" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="632" y="344" width="150" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.8"/><text x="707" y="367" text-anchor="middle" font-weight="600" fill="#085041">Regression</text><text x="707" y="386" text-anchor="middle" fill="#0f6e56">earlier tests re-run</text></g>
-  <text x="56" y="428" fill="#5f5e5a">Fail → one retry with the error text → still failing → claude-queue (Claude writes that one ticket)</text>
-  <text x="56" y="448" fill="#5f5e5a">API: length/empty → bigger budget · bad JSON/runaway → named fix · 5xx → 3 tries · 429 ×6 → breaker, resume later</text>
-  <text x="56" y="468" fill="#5f5e5a">Every call logged to calls.jsonl (tokens, cost, time); budgets re-learned from this run for the next one</text>
+  <!-- row 3: the loop -->
+  <path d="M772 294 L772 318 L122 318 L122 338" fill="none" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <rect x="32" y="342" width="796" height="196" rx="8" fill="#ffffff" stroke="#e6e6e3"/>
+  <rect x="32" y="342" width="4" height="196" fill="#ff6602"/>
+  <text x="52" y="366" font-weight="600" fill="#0b0c0e">6. For each ticket, one call to indicstack.ai</text>
+  <g><rect x="52" y="382" width="160" height="60" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="132" y="406" text-anchor="middle" font-weight="600" fill="#0b0c0e">Build the prompt</text><text x="132" y="426" text-anchor="middle" fill="#2b2e33">brief, files, the test</text></g>
+  <line x1="212" y1="412" x2="246" y2="412" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="250" y="382" width="190" height="60" rx="6" fill="#fff1e6" stroke="#ff6602" stroke-width="0.8"/><text x="345" y="402" text-anchor="middle" font-weight="600" fill="#b84500">qwen38-27b writes the files</text><text x="345" y="419" text-anchor="middle" fill="#b84500">JSON only, thinking off</text><text x="345" y="434" text-anchor="middle" font-size="10" fill="#b84500" font-family="'JetBrains Mono', Menlo, monospace" letter-spacing="1">API.INDICSTACK.AI/V1</text></g>
+  <line x1="440" y1="412" x2="474" y2="412" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="478" y="382" width="160" height="60" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="558" y="406" text-anchor="middle" font-weight="600" fill="#0b0c0e">check.mjs</text><text x="558" y="426" text-anchor="middle" fill="#2b2e33">paths, syntax, the test</text></g>
+  <line x1="638" y1="412" x2="672" y2="412" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="676" y="382" width="136" height="60" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="744" y="406" text-anchor="middle" font-weight="600" fill="#0b0c0e">Regression</text><text x="744" y="426" text-anchor="middle" fill="#2b2e33">earlier tests re-run</text></g>
+  <text x="52" y="468" fill="#2b2e33">Fails → one retry with the error text → still failing → claude-queue, and Claude writes only that ticket.</text>
+  <text x="52" y="488" fill="#2b2e33">API outcomes: cut off or empty → bigger budget · bad JSON or runaway → named fix · 5xx → 3 tries · six 429s → breaker, resume later.</text>
+  <text x="52" y="508" fill="#2b2e33">Every call is logged with tokens, ₹ cost as billed by indicstack.ai, and time. Budgets and timeouts are re-learned from this run.</text>
+  <text x="52" y="526" font-size="10" fill="#6b7076" font-family="'JetBrains Mono', Menlo, monospace" letter-spacing="1">THE MODEL NEVER SUPPLIES A PATH, A NUMBER, OR AN IDENTIFIER; SCRIPTS DO</text>
 
   <!-- row 4 -->
-  <path d="M418 478 L418 502" fill="none" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="40" y="506" width="170" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.8"/><text x="125" y="529" text-anchor="middle" font-weight="600" fill="#085041">7. Review folder</text><text x="125" y="548" text-anchor="middle" fill="#0f6e56">brief + diff, leak-scanned</text></g>
-  <line x1="210" y1="534" x2="258" y2="534" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="262" y="506" width="170" height="56" rx="8" fill="#fbeaf0" stroke="#993556" stroke-width="0.8"/><text x="347" y="529" text-anchor="middle" font-weight="600" fill="#72243e">8. Blind review</text><text x="347" y="548" text-anchor="middle" fill="#993556">fresh session, REVIEW.md</text></g>
-  <line x1="432" y1="534" x2="480" y2="534" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="484" y="506" width="170" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.8"/><text x="569" y="529" text-anchor="middle" font-weight="600" fill="#085041">9. table</text><text x="569" y="548" text-anchor="middle" fill="#0f6e56">tokens, ₹, tests, time</text></g>
-  <line x1="654" y1="534" x2="702" y2="534" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="706" y="506" width="90" height="56" rx="8" fill="#eeedfe" stroke="#534ab7" stroke-width="0.8"/><text x="751" y="529" text-anchor="middle" font-weight="600" fill="#3c3489">10. Try it</text><text x="751" y="548" text-anchor="middle" fill="#534ab7">link or cmd</text></g>
+  <path d="M430 538 L430 560" fill="none" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="32" y="564" width="180" height="60" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="122" y="588" text-anchor="middle" font-weight="600" fill="#0b0c0e">7. Review folder</text><text x="122" y="608" text-anchor="middle" fill="#2b2e33">brief + diff, leak-scanned</text></g>
+  <line x1="212" y1="594" x2="256" y2="594" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="260" y="564" width="180" height="60" rx="6" fill="#ffffff" stroke="#2b2e33" stroke-width="0.8" stroke-dasharray="4 3"/><text x="350" y="588" text-anchor="middle" font-weight="600" fill="#0b0c0e">8. Blind review</text><text x="350" y="608" text-anchor="middle" fill="#6b7076">fresh session writes REVIEW.md</text></g>
+  <line x1="440" y1="594" x2="484" y2="594" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="488" y="564" width="180" height="60" rx="6" fill="#fff1e6" stroke="#ff6602" stroke-width="0.8"/><text x="578" y="588" text-anchor="middle" font-weight="600" fill="#b84500">9. One-row table</text><text x="578" y="608" text-anchor="middle" fill="#b84500">tokens, ₹, tests, findings, time</text></g>
+  <line x1="668" y1="594" x2="712" y2="594" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="716" y="564" width="112" height="60" rx="6" fill="#ffffff" stroke="#2b2e33" stroke-width="0.8"/><text x="772" y="588" text-anchor="middle" font-weight="600" fill="#0b0c0e">10. Try it</text><text x="772" y="608" text-anchor="middle" fill="#6b7076">link or command</text></g>
 
-  <path d="M751 562 L751 590 L125 590 L125 612" fill="none" stroke="#5f5e5a" stroke-width="1.2" marker-end="url(#a)"/>
-  <g><rect x="40" y="616" width="300" height="44" rx="8" fill="#f1efe8" stroke="#888780" stroke-width="0.8"/><text x="190" y="643" text-anchor="middle" fill="#2c2c2a">11. "next" → next milestone (back to step 5)</text></g>
-  <text x="410" y="684" text-anchor="middle" fill="#6b7076">Per-project files: .pwr/BRIEF.md · tickets.jsonl · tests/ · runs/&lt;date&gt;/ (never overwritten) · state/</text>
+  <path d="M772 624 L772 648 L122 648 L122 668" fill="none" stroke="#6b7076" stroke-width="1.2" marker-end="url(#a)"/>
+  <g><rect x="32" y="672" width="330" height="44" rx="6" fill="#e6e6e3" stroke="#6b7076" stroke-width="0.8"/><text x="197" y="699" text-anchor="middle" fill="#0b0c0e">11. Say "next" → next milestone, back to step 5</text></g>
+  <text x="828" y="699" text-anchor="end" fill="#6b7076">Per project: .pwr/BRIEF.md · tickets.jsonl · tests/ · runs/&lt;date&gt;/ · state/</text>
+
+  <rect x="0" y="736" width="860" height="24" fill="#0a0c0d"/>
+  <text x="32" y="752" font-size="10" fill="#6b7076" font-family="'JetBrains Mono', Menlo, monospace" letter-spacing="1.5">INDICSTACK.AI · PLANNER, WORKER, REVIEWER · github.com/IndicStack/pwris-model</text>
 </svg>
