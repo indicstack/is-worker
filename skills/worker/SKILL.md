@@ -1,9 +1,9 @@
 ---
-name: pwris
-description: Build a feature or app with the planner-worker-reviewer pattern on IndicStack. Use when the user types /pwris followed by an idea. Claude plans (brief, tickets, tests) and reviews; IndicStack's qwen model writes every ticket; scripts check every answer. Ends with a one-row cost/time table in rupees and a link to try the result.
+name: worker
+description: Build a feature or app with the planner-worker-reviewer pattern on IndicStack. Use when the user types /is:worker (or /pwris) followed by an idea or attaches a PRD. Claude plans (brief, tickets, tests) and reviews; IndicStack's qwen model writes every ticket; scripts check every answer. Ends with a one-row cost/time table in rupees and a link to try the result.
 ---
 
-# /pwris — planner-worker-reviewer on IndicStack
+# /is:worker — planner-worker-reviewer on IndicStack
 
 Harness home: `${CLAUDE_PLUGIN_ROOT}` (call it HOME; it is this plugin's folder). Project: the current working directory (call it PROJECT). Everything per project lives in `PROJECT/.pwr/`. Run every harness command with `PWR_PROJECT=PROJECT`.
 
@@ -13,11 +13,11 @@ Ground rules (from ${CLAUDE_PLUGIN_ROOT}/explainer.html):
 - Keep the API key out of chat, files in the repo, and logs. Never ask the user to paste it here.
 - Never overwrite a run. Rule changes go into a new brief version (re-freeze).
 
-## Step 0 — connect (always first, every time /pwris is used)
+## Step 0 — connect (always first, every time /is:worker is used)
 Do these in order and show the user each result in one line. Do not plan, ask questions, or write any code until this step ends in READY.
 
 1. **Node.** Run `node --version`. If it fails or is below 18:
-   - Windows: run `winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements`. Then tell the user: "Node is installed. Restart Claude Code so it sees it, then send /pwris again." Stop. If winget is missing, give https://nodejs.org/en/download and stop.
+   - Windows: run `winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements`. Then tell the user: "Node is installed. Restart Claude Code so it sees it, then send /is:worker again." Stop. If winget is missing, give https://nodejs.org/en/download and stop.
    - macOS: if `brew` exists run `brew install node`; otherwise give https://nodejs.org/en/download and stop.
    - Nothing here needs Python.
 2. **Connection.** Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/pwris.mjs" doctor --project PROJECT` and repeat its first line to the user word for word.

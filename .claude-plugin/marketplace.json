@@ -1,8 +1,20 @@
 {
   "name": "indicstack",
-  "owner": { "name": "IndicStack", "email": "hariesh.ramanathan@indicstack.ai" },
+  "owner": {
+    "name": "IndicStack",
+    "email": "hariesh.ramanathan@indicstack.ai"
+  },
   "description": "IndicStack tools for Claude Code",
   "plugins": [
-    { "name": "pwris", "source": "./", "description": "Planner-worker-reviewer on IndicStack: Claude plans and reviews, Qwen on IndicStack writes every ticket, scripts check every answer.", "category": "productivity", "tags": ["indicstack", "harness"] }
+    {
+      "name": "is",
+      "source": "./",
+      "description": "IndicStack worker (/is:worker): Claude plans and reviews, Qwen on IndicStack writes every ticket, scripts check every answer.",
+      "category": "productivity",
+      "tags": [
+        "indicstack",
+        "harness"
+      ]
+    }
   ]
 }
