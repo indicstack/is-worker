@@ -36,9 +36,6 @@ Open any project folder in Claude Code and type `/is-worker` followed by your id
 
 Per-project files live in `<project>/.is-worker/` (brief, tickets, tests, runs, state). Run logs are git-ignored.
 
-## The bench (optional)
-
-`npm run ui` opens http://127.0.0.1:3900 to compare arms (IndicStack, Opus alone, OpenRouter) on the same brief. Offline tests: `npm test` (stub server, every outcome of the worker loop).
 
 ## Layout
 
