@@ -1,6 +1,7 @@
 // /pwris orchestrator: IndicStack-only planner-worker-reviewer for any project.
 //   node scripts/pwris.mjs <cmd> --project <dir> [...]
-//   cmds: status | preflight [--calls N] | run | review | table [--rate INR_PER_USD] | play
+//   cmds: doctor | status | preflight | run | review | table [--rate INR_PER_USD]
+//   doctor exit codes: 0 ready, 3 key missing, 4 key rejected by IndicStack, 5 IndicStack unreachable, 6 claude CLI not found
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync, spawn } from "node:child_process";
@@ -24,6 +25,46 @@ async function keyFor() {
 function listRuns() { const d = resolve(pwr, "runs"); return existsSync(d) ? readdirSync(d).filter((n) => existsSync(resolve(d, n, "meta.json"))).sort() : []; }
 function lastRun() { const r = listRuns().filter((n) => /-A(-\d+)?$/.test(n)); return r.length ? resolve(pwr, "runs", r.at(-1)) : null; }
 
+// The connection check. Prints one banner line first so a human and Claude both see the state at a glance.
+async function doctor() {
+  const { claudeBin } = await import("../lib/claude-bin.mjs");
+  const { armConfig } = await import("../lib/settings.mjs");
+  const cfg = armConfig("A");
+  const lines = [];
+  let code = 0;
+  lines.push(`node: ${process.versions.node} (${process.platform})`);
+  const bin = claudeBin();
+  const claudeOk = bin !== "claude" || spawnSync(bin, ["--version"], { encoding: "utf8" }).status === 0;
+  lines.push(`claude cli: ${claudeOk ? bin : "NOT FOUND (reviews will not run)"}`);
+  if (!claudeOk) code = code || 6;
+  const key = await keyFor();
+  const { keyStatus } = await import("../lib/keys.mjs");
+  const ks = keyStatus();
+  if (!key) { lines.push(`indicstack key: MISSING (looked in INDICSTACK_API_KEY and ${ks.path})`); code = code || 3; }
+  else {
+    lines.push(`indicstack key: present (${process.env.INDICSTACK_API_KEY ? "env INDICSTACK_API_KEY" : ks.path + ", mode " + ks.mode}), length ${key.length}`);
+    try {
+      const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 15000);
+      const r = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/models`, { headers: { authorization: `Bearer ${key}` }, signal: ctrl.signal });
+      clearTimeout(t);
+      const body = await r.text().catch(() => "");
+      if (r.status === 200) { let n = "?"; try { n = JSON.parse(body).data.length; } catch {} lines.push(`indicstack api: connected (${cfg.baseUrl}, ${n} models listed, model ${cfg.model})`); }
+      else if (r.status === 401 || r.status === 403) { lines.push(`indicstack api: KEY REJECTED (HTTP ${r.status}: ${body.slice(0, 120)})`); code = code || 4; }
+      else { lines.push(`indicstack api: HTTP ${r.status} from ${cfg.baseUrl} (${body.slice(0, 120)})`); code = code || 5; }
+    } catch (e) { lines.push(`indicstack api: UNREACHABLE (${e?.cause?.code || e?.message || e})`); code = code || 5; }
+  }
+  const probe = readJson(resolve(pwr, "state", "probe-A.json"));
+  lines.push(`probe: ${probe ? `window ${probe.context_window} (${probe.at.slice(0, 16)})` : "none yet (preflight runs it)"}`);
+  const banner = code === 0 ? "PWRIS: READY — IndicStack connected; the worker will write the code."
+    : code === 3 ? "PWRIS: NOT CONNECTED — no IndicStack key. Nothing may be planned or coded until it is saved."
+    : code === 4 ? "PWRIS: NOT CONNECTED — IndicStack rejected the key. Save the correct key before anything else."
+    : code === 5 ? "PWRIS: NOT CONNECTED — IndicStack unreachable. Check the network or ask ops; do not fall back to Claude writing the code."
+    : "PWRIS: DEGRADED — claude CLI not found; runs work, blind reviews will not.";
+  say(banner); for (const l of lines) say("  " + l);
+  if (code === 3 || code === 4) say(`\nTo save the key, run this in your own terminal (hidden input), then say "saved":\n  node "${resolve(HOME, "scripts", "key.mjs")}"`);
+  process.exit(code);
+}
+
 async function status() {
   const brief = existsSync(resolve(pwr, "BRIEF.md"));
   const frozen = brief && /^SHA-256: [0-9a-f]{64}/m.test(readFileSync(resolve(pwr, "BRIEF.md"), "utf8"));
@@ -38,7 +79,14 @@ async function status() {
   say(`last run: ${run ? `${run.split("/").pop()} ${meta.status} tests ${JSON.stringify(meta.testsFinal || null)} review ${meta.reviewVerdict || "none"}` : "none"}`);
 }
 
+async function requireConnected() {
+  const r = node("scripts/pwris.mjs", ["doctor", "--project", project], { quiet: true });
+  process.stdout.write(r.stdout || "");
+  if (r.status !== 0 && r.status !== 6) die(`refusing to continue: not connected (doctor exit ${r.status})`);
+}
+
 async function preflight() {
+  await requireConnected();
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 18) die(`Node ${process.versions.node} is too old; install Node 18 or later.`);
   mkdirSync(resolve(pwr, "state"), { recursive: true });
@@ -63,6 +111,7 @@ async function preflight() {
 }
 
 async function run() {
+  await requireConnected();
   const key = await keyFor(); if (!key) die("no key");
   const r = node("worker.mjs", ["--arm", "A", ...(args.resume ? ["--run", String(args.resume)] : [])], { env: { PWR_API_KEY: key } });
   if (r.status === 75) die("credit breaker tripped: 6 consecutive 429s. Top up, then rerun with --resume <run dir>.");
@@ -123,6 +172,6 @@ async function table() {
   writeFileSync(resolve(run, "TABLE.md"), header + "\n" + row + "\n" + (note ? "\n" + note + "\n" : ""));
 }
 
-const cmds = { status, preflight, run, review, table };
-if (!cmds[cmd]) die("usage: node scripts/pwris.mjs status|preflight|run|review|table --project <dir>");
+const cmds = { doctor, status, preflight, run, review, table };
+if (!cmds[cmd]) die("usage: node scripts/pwris.mjs doctor|status|preflight|run|review|table --project <dir>");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));

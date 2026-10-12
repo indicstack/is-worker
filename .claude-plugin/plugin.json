@@ -1,7 +1,7 @@
 {
   "name": "pwris",
   "displayName": "pwris: planner-worker-reviewer on IndicStack",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Build features with Claude planning and reviewing while IndicStack's Qwen model writes every ticket; scripts check every answer. Ends with a one-row rupee cost/time table.",
   "author": { "name": "IndicStack", "email": "hariesh.ramanathan@indicstack.ai" },
   "repository": "https://github.com/IndicStack/pwris-model",
