@@ -1,5 +1,19 @@
 # IndicStack worker (/is-worker) — planner-worker-reviewer on IndicStack
 
+## Quick start
+
+Copy the text below and paste it into the Claude Code prompt box (the message field at the bottom of the Claude Code window, or the `claude` prompt in your terminal). Claude Code does the rest: it installs the plugin from this repository, checks your IndicStack connection, and starts `/is-worker`.
+
+```
+Set up IndicStack for me from https://github.com/indicstack/is-worker, step by step, and wait for me after each step:
+1. Run /plugin marketplace add IndicStack/is-worker, then /plugin install is-worker@indicstack.
+2. Run the plugin's connection check. If Node is missing, install it. If no IndicStack API key is saved, tell me the exact command to run in my own terminal to save it, and never ask me to paste the key here.
+3. When I say "saved", run the check again and confirm it says READY.
+4. Then start /is-worker with the idea or PRD I give you next.
+```
+
+No IndicStack account yet? Sign up at https://console.indicstack.ai/signup. New accounts receive ₹2,000 of free credit, with no credit card required.
+
 Claude plans and reviews. IndicStack's Qwen model writes every ticket. Plain Node scripts check every answer. Pattern: `explainer.html` (Prasanth Ghanta, Oct 2026).
 
 ## Install (Mac, Windows, Linux)
