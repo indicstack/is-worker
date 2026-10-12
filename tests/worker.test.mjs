@@ -9,7 +9,7 @@ import { startStub } from "../stub/stub.mjs";
 import { ROOT } from "../lib/brief.mjs";
 import { readJsonl } from "../lib/jsonl.mjs";
 
-let stub; const tmpRuns = mkdtempSync(resolve(tmpdir(), "pwr-"));
+let stub; const tmpRuns = mkdtempSync(resolve(tmpdir(), "is-worker-"));
 before(async () => { stub = await startStub(0); });
 after(() => { stub.server.closeAllConnections(); stub.server.close(); rmSync(tmpRuns, { recursive: true, force: true }); });
 
@@ -21,7 +21,7 @@ async function runWorker(model, name, extra = {}) {
   const stateDir = resolve(tmpRuns, `state-${name}`); mkdirSync(stateDir, { recursive: true });
   writeFileSync(resolve(stateDir, "settings.json"), JSON.stringify({ A: { baseUrl: stub.baseUrl, model, thinking: false, concurrency: 2, maxTokens: 512, ...extra } }));
   writeFileSync(resolve(stateDir, "probe-A.json"), JSON.stringify({ context_window: 65536 }));
-  const r = await spawnAsync(["worker.mjs", "--arm", "A", "--run", runDir], { ...process.env, PWR_API_KEY: "test", PWR_STATE_DIR: stateDir, PWR_TEST_FAST: "1" });
+  const r = await spawnAsync(["worker.mjs", "--arm", "A", "--run", runDir], { ...process.env, IS_WORKER_API_KEY: "test", IS_WORKER_STATE_DIR: stateDir, IS_WORKER_TEST_FAST: "1" });
   return { r, runDir, tickets: readJsonl(resolve(runDir, "tickets.jsonl")), calls: readJsonl(resolve(runDir, "calls.jsonl")), queue: existsSync(resolve(runDir, "claude-queue.jsonl")) ? readJsonl(resolve(runDir, "claude-queue.jsonl")) : [], meta: JSON.parse(readFileSync(resolve(runDir, "meta.json"), "utf8")) };
 }
 
@@ -67,7 +67,7 @@ test("arm B makes no calls and queues every ticket", async () => {
   const runDir = resolve(tmpRuns, "B"); mkdirSync(resolve(runDir, "work/game"), { recursive: true });
   const stateDir = resolve(tmpRuns, "state-B"); mkdirSync(stateDir, { recursive: true });
   writeFileSync(resolve(stateDir, "settings.json"), "{}");
-  const r = await spawnAsync(["worker.mjs", "--arm", "B", "--run", runDir], { ...process.env, PWR_STATE_DIR: stateDir });
+  const r = await spawnAsync(["worker.mjs", "--arm", "B", "--run", runDir], { ...process.env, IS_WORKER_STATE_DIR: stateDir });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(readJsonl(resolve(runDir, "claude-queue.jsonl")).length, 6);
   assert.equal(readJsonl(resolve(runDir, "calls.jsonl")).length, 0);

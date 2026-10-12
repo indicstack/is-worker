@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "pwr-ui", "runtimeExecutable": "node", "runtimeArgs": ["ui/server.mjs"], "port": 3900 }
+    { "name": "is-worker-ui", "runtimeExecutable": "node", "runtimeArgs": ["ui/server.mjs"], "port": 3900 }
   ]
 }

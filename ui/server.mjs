@@ -1,5 +1,5 @@
-// Settings UI at http://127.0.0.1:3900. Keys go to ~/.pwr/keys.env (mode 600) and are passed to child
-// processes only through the PWR_API_KEY env var. They are never written to settings, logs, or responses.
+// Settings UI at http://127.0.0.1:3900. Keys go to ~/.is-worker/keys.env (mode 600) and are passed to child
+// processes only through the IS_WORKER_API_KEY env var. They are never written to settings, logs, or responses.
 import { createServer } from "node:http";
 import { readFileSync, existsSync, mkdirSync, createReadStream, statSync, appendFileSync, openSync } from "node:fs";
 import { resolve, extname, normalize } from "node:path";
@@ -47,7 +47,7 @@ function startReview(runId, force = false) {
   const id = `review-${runId}-${Date.now()}`;
   const logPath = resolve(JOBS_DIR, `${id}.log`);
   const fd = openSync(logPath, "a");
-  const child = spawn(...spawnClaude(["-p", REVIEW_PROMPT, "--model", "opus", "--output-format", "json", "--no-session-persistence", "--allowedTools", "Read", "Write", "Glob", "Grep"], { cwd: meta.reviewFolder, env: { ...process.env, PWR_API_KEY: "" }, stdio: ["ignore", fd, fd] }));
+  const child = spawn(...spawnClaude(["-p", REVIEW_PROMPT, "--model", "opus", "--output-format", "json", "--no-session-persistence", "--allowedTools", "Read", "Write", "Glob", "Grep"], { cwd: meta.reviewFolder, env: { ...process.env, IS_WORKER_API_KEY: "" }, stdio: ["ignore", fd, fd] }));
   const job = { id, kind: "review", arm: meta.arm, runId, started: new Date().toISOString(), status: "running", exit: null, logPath, folder: meta.reviewFolder };
   jobs.set(id, job);
   child.on("exit", (code) => {
@@ -63,7 +63,7 @@ function startJob(kind, arm, extraArgs = []) {
   const logPath = resolve(JOBS_DIR, `${id}.log`);
   const fd = openSync(logPath, "a");
   const script = { probe: "probe.mjs", calibrate: "calibrate.mjs", run: "worker.mjs" }[kind];
-  const env = { ...process.env, PWR_API_KEY: keyFor(arm) };
+  const env = { ...process.env, IS_WORKER_API_KEY: keyFor(arm) };
   const child = spawn(process.execPath, [resolve(ROOT, script), "--arm", arm, ...extraArgs], { cwd: ROOT, env, stdio: ["ignore", fd, fd] });
   const job = { id, kind, arm, started: new Date().toISOString(), status: "running", exit: null, logPath };
   jobs.set(id, job);
@@ -129,4 +129,4 @@ const server = createServer(async (req, res) => {
     res.writeHead(404); res.end("not found");
   } catch (e) { json(res, 500, { error: String(e.message || e) }); }
 });
-server.listen(PORT, HOST, () => console.log(`pwr-bench settings UI at http://${HOST}:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`is-worker settings UI at http://${HOST}:${PORT}`));

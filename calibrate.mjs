@@ -15,8 +15,8 @@ import { percentile } from "./lib/stats.mjs";
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
 const arm = args.arm;
 const cfg = armConfig(arm);
-const apiKey = process.env.PWR_API_KEY || "";
-if (!apiKey) { console.error("PWR_API_KEY missing"); process.exit(2); }
+const apiKey = process.env.IS_WORKER_API_KEY || "";
+if (!apiKey) { console.error("IS_WORKER_API_KEY missing"); process.exit(2); }
 const brief = loadBrief();
 const probe = readProbe(arm);
 if (!args.recompute && !probe?.context_window) { console.error("probe first: calibration sizes max_tokens from the served window"); process.exit(2); }

@@ -19,7 +19,7 @@ export function syntaxCheck(absPath) {
   if (absPath.endsWith(".html")) {
     const html = readFileSync(absPath, "utf8");
     // The <canvas> requirement is the Flappy bench's; project mode only needs a parseable-looking page.
-    if (process.env.PWR_PROJECT) return /<html\b|<!doctype html>/i.test(html) ? null : "html file has no <html> or <!doctype html>";
+    if (process.env.IS_WORKER_PROJECT) return /<html\b|<!doctype html>/i.test(html) ? null : "html file has no <html> or <!doctype html>";
     if (!/<canvas\b/.test(html)) return "index.html has no <canvas>";
     return null;
   }
@@ -29,7 +29,7 @@ export function syntaxCheck(absPath) {
 export function runTest(testRel, workDir, timeoutS = DEFAULTS.test_timeout_s) {
   const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", resolve(TESTS_BASE, testRel)], {
     cwd: WORK_ROOT || ROOT, encoding: "utf8", timeout: timeoutS * 1000,
-    env: { ...process.env, PWR_WORK: workDir, NODE_TEST_CONTEXT: undefined, NODE_OPTIONS: undefined, FORCE_COLOR: undefined, NO_COLOR: "1" },
+    env: { ...process.env, IS_WORKER_WORK: workDir, NODE_TEST_CONTEXT: undefined, NODE_OPTIONS: undefined, FORCE_COLOR: undefined, NO_COLOR: "1" },
   });
   const out = ((r.stdout || "") + (r.stderr || "")).replace(/\x1b\[[0-9;]*m/g, "");
   const count = (name) => Number((out.match(new RegExp(`^(?:# |\\u2139 )${name} (\\d+)`, "m")) || [])[1] ?? 0);

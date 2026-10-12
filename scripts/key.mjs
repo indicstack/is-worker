@@ -1,4 +1,4 @@
-// Stores the IndicStack API key in ~/.pwr/keys.env (mode 600) from a hidden prompt. Never echoes it.
+// Stores the IndicStack API key in ~/.is-worker/keys.env (mode 600) from a hidden prompt. Never echoes it.
 import { createInterface } from "node:readline";
 import { writeKey, keyStatus } from "../lib/keys.mjs";
 const arm = process.argv[2] || "A";

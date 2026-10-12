@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>pwr-bench</title>
+<html><head><meta charset="utf-8"><title>is-worker</title>
 <style>
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;color:#2b2e33;background:#f5f5f2;margin:0;padding:1.5rem}
 h1{font-size:1.3rem;margin:0 0 .25rem} h2{font-size:1rem;margin:1.5rem 0 .5rem} .muted{color:#6b7076;font-size:.85rem}
@@ -11,12 +11,12 @@ button:disabled{opacity:.35;cursor:default} pre{background:#0a0c0d;color:#ddd;pa
 .steps{background:#fff1e6;border-left:3px solid #ff6602;padding:.6rem .9rem;margin:1rem 0;font-size:.95rem}
 .adv{display:none}.show-adv .adv{display:table-cell} .small{font-size:.8rem;color:#6b7076}
 </style></head><body>
-<h1>pwr-bench <span class="muted">Flappy Bird, three ways</span></h1>
+<h1>is-worker <span class="muted">Flappy Bird, three ways</span></h1>
 <div class="muted" id="brief"></div>
 <div class="steps" id="steps"></div>
 <table id="arms"><thead><tr><th>Arm</th><th>Model</th><th>API key</th><th>Probe</th><th>Calibration</th><th>Do next</th>
 <th class="adv">Base URL</th><th class="adv">Conc.</th><th class="adv">Thinking</th><th class="adv">Max tokens</th><th class="adv">$/M in</th><th class="adv">$/M out</th><th class="adv">Calib. calls</th></tr></thead><tbody></tbody></table>
-<div class="small" style="margin-top:.4rem"><label><input type="checkbox" id="adv"> show advanced settings</label> · settings save as you change them · keys go to ~/.pwr/keys.env (mode 600) and are never shown again</div>
+<div class="small" style="margin-top:.4rem"><label><input type="checkbox" id="adv"> show advanced settings</label> · settings save as you change them · keys go to ~/.is-worker/keys.env (mode 600) and are never shown again</div>
 <h2>Jobs</h2>
 <table id="jobs"><thead><tr><th>Job</th><th>Status</th><th>Started</th><th>Log</th></tr></thead><tbody></tbody></table>
 <pre id="log" style="display:none"></pre>

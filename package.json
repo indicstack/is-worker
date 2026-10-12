@@ -1,5 +1,5 @@
 {
-  "name": "pwr-bench",
+  "name": "is-worker",
   "private": true,
   "version": "0.1.0",
   "description": "Planner-worker-reviewer harness: Flappy Bird three ways. Node built-ins only.",

@@ -9,8 +9,8 @@ import { FILES_SCHEMA, parseFiles } from "./lib/schema.mjs";
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
 const arm = args.arm;
 const cfg = armConfig(arm);
-const apiKey = process.env.PWR_API_KEY || "";
-if (!apiKey) { console.error("PWR_API_KEY missing"); process.exit(2); }
+const apiKey = process.env.IS_WORKER_API_KEY || "";
+if (!apiKey) { console.error("IS_WORKER_API_KEY missing"); process.exit(2); }
 const out = { arm, at: new Date().toISOString(), baseUrl: cfg.baseUrl, model: cfg.model, steps: [] };
 const say = (m) => console.log(`${new Date().toISOString()} ${m}`);
 

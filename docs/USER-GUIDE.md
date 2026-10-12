@@ -81,7 +81,7 @@ If Node is missing, it installs it (winget on Windows, Homebrew on Mac) and asks
 node "<plugin folder>/scripts/key.mjs"
 ```
 
-Paste your IndicStack key when asked. Typing is hidden. The key is saved to `~/.pwr/keys.env` with owner-only permissions, and never appears in chat or logs. Say **saved**, and the check runs again.
+Paste your IndicStack key when asked. Typing is hidden. The key is saved to `~/.is-worker/keys.env` with owner-only permissions, and never appears in chat or logs. Say **saved**, and the check runs again.
 
 Claude will not plan or write code until this says READY. That is deliberate: it stops the silent failure where Claude quietly does all the work itself.
 
@@ -122,7 +122,7 @@ From real runs in October 2026: a 15-ticket milestone cost about ₹9 on IndicSt
 
 ```
 your-project/
-  .pwr/
+  .is-worker/
     BRIEF.md          the frozen spec
     tickets.jsonl     the tickets
     tests/            one test per ticket
@@ -130,7 +130,7 @@ your-project/
     state/            probe, self-calibration
   src/ ...            the code IndicStack wrote, in your tree
 ```
-`.pwr/runs/` and `.pwr/state/` are added to `.gitignore` automatically.
+`.is-worker/runs/` and `.is-worker/state/` are added to `.gitignore` automatically.
 
 ## 9. Troubleshooting
 

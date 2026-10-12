@@ -31,8 +31,8 @@ for (const t of tickets.filter((t) => true).sort((a, b) => a.id - b.id)) {
   for (let attempt = 1; attempt <= 2 && !done; attempt++) {
     const [sys, user] = buildMessages(t, p.work, fixes, runId);
     const t0 = Date.now();
-    const tmp = mkdtempSync(resolve(tmpdir(), "pwr-sys-")); const sysFile = resolve(tmp, "system.txt"); writeFileSync(sysFile, sys.content);
-    const r = runClaude(["-p", "--system-prompt-file", sysFile, "--model", MODEL, "--output-format", "json", "--no-session-persistence", "--allowedTools", ""], { cwd: p.work, input: user.content, env: { ...process.env, PWR_API_KEY: "" } });
+    const tmp = mkdtempSync(resolve(tmpdir(), "is-worker-sys-")); const sysFile = resolve(tmp, "system.txt"); writeFileSync(sysFile, sys.content);
+    const r = runClaude(["-p", "--system-prompt-file", sysFile, "--model", MODEL, "--output-format", "json", "--no-session-persistence", "--allowedTools", ""], { cwd: p.work, input: user.content, env: { ...process.env, IS_WORKER_API_KEY: "" } });
     const seconds = (Date.now() - t0) / 1000;
     let j = null; try { j = JSON.parse(r.stdout); } catch {}
     const text = j?.result ?? "";

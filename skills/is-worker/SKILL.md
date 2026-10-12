@@ -5,7 +5,7 @@ description: Build a feature or app with the planner-worker-reviewer pattern on 
 
 # /is-worker — planner-worker-reviewer on IndicStack
 
-Harness home: `${CLAUDE_PLUGIN_ROOT}` (call it HOME; it is this plugin's folder). Project: the current working directory (call it PROJECT). Everything per project lives in `PROJECT/.pwr/`. Run every harness command with `PWR_PROJECT=PROJECT`.
+Harness home: `${CLAUDE_PLUGIN_ROOT}` (call it HOME; it is this plugin's folder). Project: the current working directory (call it PROJECT). Everything per project lives in `PROJECT/.is-worker/`. Run every harness command with `IS_WORKER_PROJECT=PROJECT`.
 
 Ground rules (from ${CLAUDE_PLUGIN_ROOT}/explainer.html):
 - You never write an identifier, path, or number from memory into results. Numbers come from the logs; the `table` command prints them.
@@ -34,18 +34,18 @@ If the user attached or named a PRD or spec (docx, pdf, md), read it first (for 
 Ask only what the brief cannot be written without: who uses it, what "done" looks like, anything they don't want, the stack if not obvious from the repo. One message, numbered. Wait.
 
 ## Step 2 — brief
-Write `PROJECT/.pwr/BRIEF.md` in plain words: deliverable, numbered rules (R1…), constants with values, interfaces each test will pin (function names, inputs, outputs). Settle every judgement call now. Show the brief, ask "ok to freeze?". On yes: `node ${CLAUDE_PLUGIN_ROOT}/scripts/freeze-brief.mjs` with `PWR_PROJECT=PROJECT`.
+Write `PROJECT/.is-worker/BRIEF.md` in plain words: deliverable, numbered rules (R1…), constants with values, interfaces each test will pin (function names, inputs, outputs). Settle every judgement call now. Show the brief, ask "ok to freeze?". On yes: `node ${CLAUDE_PLUGIN_ROOT}/scripts/freeze-brief.mjs` with `IS_WORKER_PROJECT=PROJECT`.
 
 ## Step 3 — tickets and tests
-Split into milestones (one PR each), then tickets: one file or function each, logic before UI, 4–15 per milestone. Write `PROJECT/.pwr/tickets.jsonl`, one JSON per line:
+Split into milestones (one PR each), then tickets: one file or function each, logic before UI, 4–15 per milestone. Write `PROJECT/.is-worker/tickets.jsonl`, one JSON per line:
 `{"id":1,"title":"…","deps":[],"writes":["src/x.mjs"],"reads":["src/constants.mjs"],"test":"tests/t1.test.mjs","rules":["R1"],"task":"…exact instructions, quoting the brief…"}`
-Write each test under `PROJECT/.pwr/tests/` BEFORE any ticket runs (`node:test`; import the code under test from `process.env.PWR_WORK`, which is PROJECT). Harness-owned files (constants, config) you write yourself and commit first. Show the ticket list.
+Write each test under `PROJECT/.is-worker/tests/` BEFORE any ticket runs (`node:test`; import the code under test from `process.env.IS_WORKER_WORK`, which is PROJECT). Harness-owned files (constants, config) you write yourself and commit first. Show the ticket list.
 
 ## Step 4 — preflight
 `node "${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs" preflight --project PROJECT`. It re-runs the connection check and refuses to continue if not READY (go back to Step 0). Preflight probes once a day (about 10 tiny calls). There is no separate calibration: the first run uses defaults and every run recalibrates budgets and timeouts from its own calls.
 
 ## Step 5 — run
-Say: "N tickets, IndicStack, about ₹X" (X from the last calibration run's cost if any, else say unknown). Wait for "go". Then `node ${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs run --project PROJECT`. It writes code into PROJECT, checks every ticket, re-runs earlier tickets' tests after each one. Queued tickets: write them yourself and submit with `PWR_PROJECT=PROJECT node ${CLAUDE_PLUGIN_ROOT}/check.mjs --run <run> --ticket N --files <json>`.
+Say: "N tickets, IndicStack, about ₹X" (X from the last calibration run's cost if any, else say unknown). Wait for "go". Then `node ${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs run --project PROJECT`. It writes code into PROJECT, checks every ticket, re-runs earlier tickets' tests after each one. Queued tickets: write them yourself and submit with `IS_WORKER_PROJECT=PROJECT node ${CLAUDE_PLUGIN_ROOT}/check.mjs --run <run> --ticket N --files <json>`.
 
 ## Step 6 — review and table
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs review --project PROJECT` (a blind Opus session in an isolated folder, ~₹50), then `node ${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs table --project PROJECT`. Paste the table as-is. Then give the user one way to try the result (a URL, a command, or a file to open). Turn any finding the review repeats into a new test before the next milestone.

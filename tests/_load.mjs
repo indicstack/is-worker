@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-const work = process.env.PWR_WORK;
-if (!work) throw new Error("PWR_WORK env var must point at the run's work dir");
+const work = process.env.IS_WORKER_WORK;
+if (!work) throw new Error("IS_WORKER_WORK env var must point at the run's work dir");
 export const WORK = resolve(work);
 export const load = (rel) => import(pathToFileURL(resolve(WORK, rel)).href);
 export const C = await load("game/constants.mjs");

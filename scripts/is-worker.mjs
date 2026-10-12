@@ -10,9 +10,11 @@ import { runClaude } from "../lib/claude-bin.mjs";
 
 const args = Object.fromEntries(process.argv.slice(3).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
 const cmd = process.argv[2];
-const project = resolve(String(args.project || process.env.PWR_PROJECT || process.cwd()));
-const pwr = resolve(project, ".pwr");
-const env = { ...process.env, PWR_PROJECT: project };
+const project = resolve(String(args.project || process.env.IS_WORKER_PROJECT || process.cwd()));
+const pwr = resolve(project, ".is-worker");
+// One-time migration: project folders created before 12 Oct 2026 used <project>/.pwr
+if (!existsSync(pwr) && existsSync(resolve(project, ".pwr"))) { (await import("node:fs")).renameSync(resolve(project, ".pwr"), pwr); console.log(".pwr/ renamed to .is-worker/"); }
+const env = { ...process.env, IS_WORKER_PROJECT: project };
 const node = (script, extra = [], opts = {}) => spawnSync(process.execPath, [resolve(HOME, script), ...extra], { cwd: HOME, encoding: "utf8", env: { ...env, ...(opts.env || {}) }, stdio: opts.quiet ? "pipe" : "inherit", maxBuffer: 50e6 });
 const say = (m) => console.log(m);
 const die = (m) => { console.error(m); process.exit(2); };
@@ -90,7 +92,7 @@ async function preflight() {
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 18) die(`Node ${process.versions.node} is too old; install Node 18 or later.`);
   mkdirSync(resolve(pwr, "state"), { recursive: true });
-  const gi = resolve(project, ".gitignore"); const want = [".pwr/runs/", ".pwr/state/"];
+  const gi = resolve(project, ".gitignore"); const want = [".is-worker/runs/", ".is-worker/state/"];
   const cur = existsSync(gi) ? readFileSync(gi, "utf8") : "";
   const missing = want.filter((l) => !cur.split("\n").includes(l));
   if (missing.length) { writeFileSync(gi, cur + (cur && !cur.endsWith("\n") ? "\n" : "") + missing.join("\n") + "\n"); say(`.gitignore: added ${missing.join(", ")}`); }
@@ -99,13 +101,13 @@ async function preflight() {
   const r0 = node("lib/brief.mjs", [], { quiet: true });
   const check = spawnSync(process.execPath, ["-e", "import('./lib/brief.mjs').then(m=>{m.loadBrief();console.log('ok')})"], { cwd: HOME, encoding: "utf8", env });
   if (!/ok/.test(check.stdout)) die(`brief problem: ${check.stderr.split("\n").find((l) => /Error/.test(l)) || check.stderr}`);
-  if (!existsSync(resolve(pwr, "tickets.jsonl"))) die("no .pwr/tickets.jsonl");
+  if (!existsSync(resolve(pwr, "tickets.jsonl"))) die("no .is-worker/tickets.jsonl");
   const probe = readJson(resolve(pwr, "state", "probe-A.json"));
   const fresh = probe && Date.now() - new Date(probe.at) < 24 * 3600 * 1000;
-  if (!fresh) { say("probe: running (one call + max_tokens ladder)"); const r = node("probe.mjs", ["--arm", "A"], { env: { PWR_API_KEY: key } }); if (r.status !== 0) die("probe failed"); } else say(`probe: fresh (${probe.at.slice(0, 16)}, window ${probe.context_window})`);
+  if (!fresh) { say("probe: running (one call + max_tokens ladder)"); const r = node("probe.mjs", ["--arm", "A"], { env: { IS_WORKER_API_KEY: key } }); if (r.status !== 0) die("probe failed"); } else say(`probe: fresh (${probe.at.slice(0, 16)}, window ${probe.context_window})`);
   const cal = readJson(resolve(pwr, "state", "calibration-A.json"));
   const model = (await import("../lib/settings.mjs")).armConfig("A").model;
-  if (args.calibrate) { const n = Number(args.calls || 48); say(`calibration: running ${n} calls for ${model}`); const r = node("calibrate.mjs", ["--arm", "A", "--calls", String(n)], { env: { PWR_API_KEY: key } }); if (r.status !== 0) die("calibration failed"); }
+  if (args.calibrate) { const n = Number(args.calls || 48); say(`calibration: running ${n} calls for ${model}`); const r = node("calibrate.mjs", ["--arm", "A", "--calls", String(n)], { env: { IS_WORKER_API_KEY: key } }); if (r.status !== 0) die("calibration failed"); }
   else say(cal && cal.model === model ? `calibration: from ${cal.source || "calibration run"} ${cal.at.slice(0, 16)} (${cal.n_measured ?? cal.n_ok} calls)` : "calibration: none yet; first run uses defaults and then calibrates itself from its own calls");
   say("preflight ok");
 }
@@ -113,15 +115,15 @@ async function preflight() {
 async function run() {
   await requireConnected();
   const key = await keyFor(); if (!key) die("no key");
-  const r = node("worker.mjs", ["--arm", "A", ...(args.resume ? ["--run", String(args.resume)] : [])], { env: { PWR_API_KEY: key } });
+  const r = node("worker.mjs", ["--arm", "A", ...(args.resume ? ["--run", String(args.resume)] : [])], { env: { IS_WORKER_API_KEY: key } });
   if (r.status === 75) die("credit breaker tripped: 6 consecutive 429s. Top up, then rerun with --resume <run dir>.");
   if (r.status !== 0) die(`worker exited ${r.status}`);
   const meta = readJson(resolve(lastRun(), "meta.json"));
   say(`run ${meta.id}: ${meta.status}, final tests ${JSON.stringify(meta.testsFinal)}`);
   // self-calibration: recompute speed, chars/token and answer budgets from this run's own calls
-  const rc = node("calibrate.mjs", ["--arm", "A", "--recompute", lastRun(), "--source", `run ${meta.id}`], { env: { PWR_API_KEY: key }, quiet: true });
+  const rc = node("calibrate.mjs", ["--arm", "A", "--recompute", lastRun(), "--source", `run ${meta.id}`], { env: { IS_WORKER_API_KEY: key }, quiet: true });
   say(rc.status === 0 ? "calibration updated from this run" : `calibration not updated: ${(rc.stderr || rc.stdout).slice(0, 200)}`);
-  if (meta.status === "needs_claude") say(`tickets queued for the planner: see ${resolve(lastRun(), "claude-queue.jsonl")}. Submit each with: node ${resolve(HOME, "check.mjs")} --run <run> --ticket N --files <json> (PWR_PROJECT set).`);
+  if (meta.status === "needs_claude") say(`tickets queued for the planner: see ${resolve(lastRun(), "claude-queue.jsonl")}. Submit each with: node ${resolve(HOME, "check.mjs")} --run <run> --ticket N --files <json> (IS_WORKER_PROJECT set).`);
 }
 
 async function review() {
@@ -131,7 +133,7 @@ async function review() {
   const meta = readJson(resolve(run, "meta.json"));
   say(`review folder: ${meta.reviewFolder}`);
   const t0 = Date.now();
-  const r = runClaude(["-p", "--model", String(args.model || "opus"), "--output-format", "json", "--no-session-persistence", "--allowedTools", "Read", "Write", "Glob", "Grep"], { cwd: meta.reviewFolder, input: "Read PROMPT-REVIEW.md in this folder and do exactly what it says. Write REVIEW.md here, then stop.", env: { ...process.env, PWR_API_KEY: "" } });
+  const r = runClaude(["-p", "--model", String(args.model || "opus"), "--output-format", "json", "--no-session-persistence", "--allowedTools", "Read", "Write", "Glob", "Grep"], { cwd: meta.reviewFolder, input: "Read PROMPT-REVIEW.md in this folder and do exactly what it says. Write REVIEW.md here, then stop.", env: { ...process.env, IS_WORKER_API_KEY: "" } });
   let j = null; try { j = JSON.parse(r.stdout.trim().split("\n").filter((l) => l.startsWith("{")).pop()); } catch {}
   const u = j?.usage || {};
   const text = existsSync(resolve(meta.reviewFolder, "REVIEW.md")) ? readFileSync(resolve(meta.reviewFolder, "REVIEW.md"), "utf8") : "";

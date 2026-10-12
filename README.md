@@ -34,7 +34,7 @@ Step-by-step with screenshots, from sign-up to the first table: [docs/USER-GUIDE
 
 Open any project folder in Claude Code and type `/is-worker` followed by your idea, or attach a PRD. The skill asks a few questions, writes a frozen brief, tickets and tests, waits for your go, runs IndicStack on every ticket, runs a blind review, and prints a one-row table (tokens, ₹ cost, tests, findings, time).
 
-Per-project files live in `<project>/.pwr/` (brief, tickets, tests, runs, state). Run logs are git-ignored.
+Per-project files live in `<project>/.is-worker/` (brief, tickets, tests, runs, state). Run logs are git-ignored.
 
 ## The bench (optional)
 

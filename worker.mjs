@@ -16,7 +16,7 @@ import { applyAndCheck, recordTicket, enqueueForClaude, finalTestCount } from ".
 import { roundUpTo } from "./lib/stats.mjs";
 
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
-const sleep = (ms) => new Promise((r) => setTimeout(r, process.env.PWR_TEST_FAST ? Math.min(ms, 5) : ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, process.env.IS_WORKER_TEST_FAST ? Math.min(ms, 5) : ms));
 const log = (p, msg) => { const line = `${new Date().toISOString()} ${msg}`; console.log(line); try { appendJsonl(p.log.replace(/\.log$/, ".events.jsonl"), { ts: new Date().toISOString(), msg }); } catch {} };
 
 export function budgetFor(ticket, cfg, cal) {
@@ -140,8 +140,8 @@ async function main() {
     return;
   }
 
-  const apiKey = process.env.PWR_API_KEY || "";
-  if (!apiKey) { console.error("PWR_API_KEY missing in env (the UI passes it from ~/.pwr/keys.env)"); process.exit(2); }
+  const apiKey = process.env.IS_WORKER_API_KEY || "";
+  if (!apiKey) { console.error("IS_WORKER_API_KEY missing in env (the UI passes it from ~/.is-worker/keys.env)"); process.exit(2); }
   const cal = readCalibration(arm, cfg.model);
   const probe = readProbe(arm);
   if (cal) updateMeta(run.dir, { calibration: { at: cal.at, n: cal.n, speed_tps_p10: cal.speed_tps_p10, answer_tokens_p95: cal.answer_tokens_p95 } });
