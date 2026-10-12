@@ -24,8 +24,15 @@ Then sign in at **https://console.indicstack.ai/login** with that email and pass
 
 In the console:
 
-1. Add prepaid credit (rupees, GST invoice). A first milestone of 10 to 15 tickets costs about ₹10 on the worker side, so a small top-up goes a long way.
-2. Open **API keys** and create a key. Copy it once and keep it somewhere safe such as a password manager. You will paste it into a hidden terminal prompt in step 5, never into a chat.
+1. Every new account starts with **₹2,000 of free credit**, so you can run your first milestones without paying anything. After that, add prepaid credit in rupees with a GST invoice.
+2. Pricing for the worker model, as of October 2026:
+
+   | Model | Input price | Output price |
+   |---|---|---|
+   | qwen38-27b | ₹21 per 1M tokens | ₹190 per 1M tokens |
+
+   A first milestone of 10 to 15 tickets costs about ₹10 on the worker side, so the free credit covers roughly 200 such milestones.
+3. Open **API keys** and create a key. Copy it once and keep it somewhere safe such as a password manager. You will paste it into a hidden terminal prompt in step 5, never into a chat.
 
 > Owner note: add a screenshot of the API keys page here as `img/03-api-key.jpg` once logged in.
 

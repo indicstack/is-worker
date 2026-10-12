@@ -18,6 +18,10 @@ Check the connection yourself any time:
 node "<plugin folder>/scripts/pwris.mjs" doctor
 ```
 
+## Cost
+
+New IndicStack accounts get ₹2,000 of free credit. The worker model `qwen38-27b` is priced at ₹21 per 1M input tokens and ₹190 per 1M output tokens (October 2026); a 15-ticket milestone has cost about ₹9 of that in practice.
+
 ## Guide
 
 Step-by-step with screenshots, from sign-up to the first table: [docs/USER-GUIDE.md](docs/USER-GUIDE.md).
