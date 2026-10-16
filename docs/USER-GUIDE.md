@@ -2,7 +2,7 @@
 
 `/is-worker` is a Claude Code plugin. You describe an app or attach a PRD; Claude plans and reviews, IndicStack's Qwen model writes every piece of code, and scripts check every answer. At the end of each milestone you get a one-row table of tokens, rupees, tests and time, plus a way to try what was built.
 
-Works on Mac and Windows, in the Claude Code CLI and the Claude desktop app.
+Works on Mac and Windows, in the Claude Code CLI and the Claude desktop app. The same steps run in Cursor, OpenAI Codex CLI, OpenCode and Google Antigravity; see section 4a.
 
 ---
 
@@ -55,6 +55,16 @@ Inside Claude Code, run these two commands one after the other:
 
 If you installed an older name (`pwris@indicstack` or `is@indicstack`) before 12 October 2026, uninstall it first and re-add the marketplace: `/plugin uninstall is@indicstack`, `/plugin marketplace remove indicstack`, then the two commands above.
 
+## 4a. Using Cursor, Codex, OpenCode or Antigravity instead
+
+You do not need Claude Code. The planner steps are also in the harness's `AGENTS.md`, and the scripts are plain Node.
+
+1. Clone the harness to a fixed folder: `git clone https://github.com/IndicStack/is-worker ~/is-worker`
+2. In your project: `node ~/is-worker/scripts/is-worker.mjs init --project . --ide cursor` (or `codex`, `opencode`, `antigravity`, `all`). It writes `AGENTS.md` (Cursor, Codex, OpenCode, Antigravity), `.cursor/rules/is-worker.mdc` (Cursor) and `.agent/rules/is-worker.md` (Antigravity) as needed, keeping anything already in those files.
+3. Open the project in the IDE and type `use is-worker to build <your idea>`.
+
+The blind review (step 6 below) uses the `claude` CLI by default. If you do not have it, pick the reviewer your IDE ships with: `--reviewer codex` (Codex CLI), `--reviewer opencode` (OpenCode), or `--reviewer custom` with `IS_WORKER_REVIEW_CMD` set to any command that takes `{folder}` and `{prompt}`. Only the claude reviewer reports tokens and cost. Everything else, including how the key is saved, is identical.
+
 ## 5. First run: connect
 
 Open the folder of your project (new or existing) in Claude Code and type:
@@ -71,7 +81,7 @@ The first thing it does is a connection check. You will see one of these lines:
 | `IS-WORKER: NOT CONNECTED — no IndicStack key` | No key saved yet | It opens a hidden key prompt for you (see below) |
 | `IS-WORKER: NOT CONNECTED — IndicStack rejected the key` | Wrong or expired key | Same prompt; paste the correct key |
 | `IS-WORKER: NOT CONNECTED — unreachable` | Network or IndicStack is down | Check your network, or email welcome@indicstack.ai |
-| `IS-WORKER: DEGRADED` | The `claude` command is not on the PATH | Runs work; the blind review is skipped until fixed |
+| `IS-WORKER: DEGRADED` | The selected reviewer CLI (`claude` by default) is not on the PATH | Runs work; the blind review is skipped until fixed, or pick another with `--reviewer` |
 
 If Node is missing, it installs it (winget on Windows, Homebrew on Mac) and asks you to restart Claude Code once.
 
@@ -100,7 +110,7 @@ What follows, in order:
 3. **Milestones and tickets**: one PR per milestone, 4 to 15 small tickets each, every ticket with its test written before any code.
 4. **Your go**: the ticket list and a rupee estimate. Say "go".
 5. **The run**: IndicStack writes each ticket; scripts check paths, syntax, the ticket's test and all earlier tests. A failed ticket is retried once with the error, then handed to Claude for that one ticket only.
-6. **Blind review**: a fresh Claude session, in an isolated folder, judges the code without knowing who wrote it.
+6. **Blind review**: a fresh session of the reviewer CLI (claude by default; codex, opencode or a custom command), in an isolated folder, judges the code without knowing who wrote it.
 7. **The table** and a link or command to try the result.
 
 Say **next** for the next milestone, or **status** at any time for a one-line summary.
@@ -110,7 +120,7 @@ Say **next** for the next milestone, or **status** at any time for a one-line su
 | Column | Meaning |
 |---|---|
 | Worker tokens in/out, worker cost | What IndicStack used and billed, in rupees |
-| Opus review tokens, review cost | The blind review session, converted to rupees at the day's rate |
+| Review tokens, review cost | The blind review session (the header names the reviewer), converted to rupees at the day's rate; codex, opencode and custom reviewers report no tokens, shown as ? |
 | First try | Tickets that passed without a retry |
 | Final tests | All tests across all tickets, after the last ticket |
 | Findings | Logic findings the blind reviewer raised |

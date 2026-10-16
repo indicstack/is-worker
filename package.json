@@ -5,7 +5,7 @@
   "description": "Planner-worker-reviewer harness: Flappy Bird three ways. Node built-ins only.",
   "scripts": {
     "ui": "node ui/server.mjs",
-    "test": "node --test tests/client.test.mjs tests/worker.test.mjs",
+    "test": "node --test tests/client.test.mjs tests/worker.test.mjs tests/init.test.mjs tests/reviewer.test.mjs",
     "stub": "node stub/stub.mjs 3901",
     "freeze": "node scripts/freeze-brief.mjs"
   }
