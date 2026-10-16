@@ -35,7 +35,7 @@ for (const ide of Object.keys(expectFiles)) {
 }
 test("cursor rule file starts with the agent-requested frontmatter", () => {
   const t = read(resolve(tmp, "cursor", ".cursor/rules/is-worker.mdc"));
-  assert.ok(t.startsWith("---\ndescription: IndicStack is-worker planner\nalwaysApply: false\nglobs: []\n---\n" + START), t.slice(0, 160));
+  assert.ok(t.startsWith("---\ndescription: IndicStack is-worker planner\nglobs:\nalwaysApply: false\n---\n" + START), t.slice(0, 160));
 });
 test("init --ide claude writes nothing and prints the two plugin commands", () => {
   const p = fresh("claude");

@@ -77,7 +77,7 @@ The first thing it does is a connection check. You will see one of these lines:
 
 | Line | Meaning | What happens next |
 |---|---|---|
-| `IS-WORKER: READY` | Node, the claude command and your IndicStack key all work | It continues |
+| `IS-WORKER: READY` | Node, the selected reviewer CLI (`claude` by default) and your IndicStack key all work | It continues |
 | `IS-WORKER: NOT CONNECTED — no IndicStack key` | No key saved yet | It opens a hidden key prompt for you (see below) |
 | `IS-WORKER: NOT CONNECTED — IndicStack rejected the key` | Wrong or expired key | Same prompt; paste the correct key |
 | `IS-WORKER: NOT CONNECTED — unreachable` | Network or IndicStack is down | Check your network, or email welcome@indicstack.ai |
@@ -109,7 +109,7 @@ What follows, in order:
 2. **Brief**: a plain-words spec with numbered rules. You say "ok to freeze"; it is then hashed and cannot change silently.
 3. **Milestones and tickets**: one PR per milestone, 4 to 15 small tickets each, every ticket with its test written before any code.
 4. **Your go**: the ticket list and a rupee estimate. Say "go".
-5. **The run**: IndicStack writes each ticket; scripts check paths, syntax, the ticket's test and all earlier tests. A failed ticket is retried once with the error, then handed to Claude for that one ticket only.
+5. **The run**: IndicStack writes each ticket; scripts check paths, syntax, the ticket's test and all earlier tests. A failed ticket is retried once with the error, then handed to the planner (Claude in Claude Code) for that one ticket only.
 6. **Blind review**: a fresh session of the reviewer CLI (claude by default; codex, opencode or a custom command), in an isolated folder, judges the code without knowing who wrote it.
 7. **The table** and a link or command to try the result.
 
@@ -147,11 +147,11 @@ your-project/
 - **The command shows as `/is-worker:is-worker` or `/is-worker-is-worker`.** That is the plugin's full name (plugin:skill). The short form `/is-worker` works too.
 - **NOT CONNECTED after saving the key.** Run the check yourself: `node "<plugin folder>/scripts/is-worker.mjs" doctor`. A `length` far from your key's real length means a paste error.
 - **IndicStack is slow or times out.** The harness waits up to 60 s for the first token and retries once. If it keeps happening, email welcome@indicstack.ai; GPUs are sometimes taken offline for maintenance.
-- **A ticket went to the queue.** Claude writes that one ticket and submits it through the same checker. Everything else stays with IndicStack.
+- **A ticket went to the queue.** The planner (Claude in Claude Code) writes that one ticket and submits it through the same checker. Everything else stays with IndicStack.
 - **Python or pip errors.** Nothing here uses Python. If you see such errors they come from your project, not the plugin.
 
 ## 10. Keeping it updated
 
 ```
-/plugin update is@indicstack
+/plugin update is-worker@indicstack
 ```

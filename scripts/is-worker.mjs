@@ -4,13 +4,18 @@
 //   doctor exit codes: 0 ready, 3 key missing, 4 key rejected by IndicStack, 5 IndicStack unreachable, 6 selected reviewer CLI not found
 //   The reviewer is also picked by IS_WORKER_REVIEWER; "custom" runs the IS_WORKER_REVIEW_CMD template (see lib/reviewer.mjs).
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync, spawn } from "node:child_process";
-import { HOME } from "../lib/paths.mjs";
+
+// HOME is computed here, not imported from lib/paths.mjs: that module reads IS_WORKER_PROJECT when first loaded, and it
+// must see the --project value set below. Every lib module is therefore imported lazily (await import) after that line.
+const HOME = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const args = Object.fromEntries(process.argv.slice(3).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
 const cmd = process.argv[2];
 const project = resolve(String(args.project || process.env.IS_WORKER_PROJECT || process.cwd()));
+process.env.IS_WORKER_PROJECT = project; // so in-process lib imports (settings, runs, paths) see the same project the child scripts get via env
 const pwr = resolve(project, ".is-worker");
 // One-time migration: project folders created before 12 Oct 2026 used <project>/.pwr
 if (!existsSync(pwr) && existsSync(resolve(project, ".pwr"))) { (await import("node:fs")).renameSync(resolve(project, ".pwr"), pwr); console.log(".pwr/ renamed to .is-worker/"); }
@@ -19,6 +24,8 @@ const node = (script, extra = [], opts = {}) => spawnSync(process.execPath, [res
 const say = (m) => console.log(m);
 const die = (m) => { console.error(m); process.exit(2); };
 const readJson = (p) => (existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null);
+// One line from a child's failure output: the line that names the problem, never a stack frame.
+const firstError = (out) => { const lines = String(out || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean); return lines.find((l) => /Error:|^(no |review folder|PROMPT-REVIEW|usage:)/.test(l)) || lines.find((l) => !/^(at |node:|Node\.js v|\^+$)/.test(l)) || "failed"; };
 
 async function keyFor() {
   const { keyFor } = await import("../lib/keys.mjs");
@@ -26,6 +33,12 @@ async function keyFor() {
 }
 function listRuns() { const d = resolve(pwr, "runs"); return existsSync(d) ? readdirSync(d).filter((n) => existsSync(resolve(d, n, "meta.json"))).sort() : []; }
 function lastRun() { const r = listRuns().filter((n) => /-A(-\d+)?$/.test(n)); return r.length ? resolve(pwr, "runs", r.at(-1)) : null; }
+// The run `review` and `table` work on: --run <dir> if given, else the latest. Fails in one line that says where it looked and what to do.
+function pickRun() {
+  const run = args.run ? resolve(String(args.run)) : lastRun();
+  if (!run || !existsSync(resolve(run, "meta.json"))) die(`no run found${args.run ? ` at ${run} (no meta.json there)` : ` under ${resolve(pwr, "runs")}`}. Run \`node "${resolve(HOME, "scripts/is-worker.mjs")}" run --project ${project}\` first, or pass --run ${resolve(pwr, "runs")}/<id>`);
+  return run;
+}
 
 // The connection check. Prints one banner line first so a human and Claude both see the state at a glance.
 async function doctor() {
@@ -107,7 +120,7 @@ async function preflight() {
   if (!key) die(`No IndicStack key. Run once in your terminal:\n  node ${resolve(HOME, "scripts/key.mjs")}\n(or set INDICSTACK_API_KEY). Never paste the key into chat.`);
   const r0 = node("lib/brief.mjs", [], { quiet: true });
   const check = spawnSync(process.execPath, ["-e", "import('./lib/brief.mjs').then(m=>{m.loadBrief();console.log('ok')})"], { cwd: HOME, encoding: "utf8", env });
-  if (!/ok/.test(check.stdout)) die(`brief problem: ${check.stderr.split("\n").find((l) => /Error/.test(l)) || check.stderr}`);
+  if (!/ok/.test(check.stdout)) die(`brief problem: ${firstError(check.stderr)}`);
   if (!existsSync(resolve(pwr, "tickets.jsonl"))) die("no .is-worker/tickets.jsonl");
   const probe = readJson(resolve(pwr, "state", "probe-A.json"));
   const fresh = probe && Date.now() - new Date(probe.at) < 24 * 3600 * 1000;
@@ -134,12 +147,12 @@ async function run() {
 }
 
 async function review() {
-  const run = args.run ? resolve(String(args.run)) : lastRun(); if (!run) die("no run");
+  const run = pickRun();
   const { runReview, selectedReviewer } = await import("../lib/reviewer.mjs");
   let name; try { name = selectedReviewer(args.reviewer); } catch (e) { die(e.message); }
   const model = args.model ? String(args.model) : name === "claude" ? "opus" : null; // other CLIs use their own default model unless --model is given
   const mk = node("review/make-review.mjs", ["--run", run], { quiet: true });
-  if (mk.status !== 0) die(mk.stderr || mk.stdout);
+  if (mk.status !== 0) die(`review folder not built: ${firstError(mk.stderr || mk.stdout)}`);
   const meta = readJson(resolve(run, "meta.json"));
   say(`review folder: ${meta.reviewFolder}`);
   say(`reviewer: ${name}${model ? ` (model ${model})` : ""}`);
@@ -160,7 +173,7 @@ async function review() {
 }
 
 async function table() {
-  const run = args.run ? resolve(String(args.run)) : lastRun(); if (!run) die("no run");
+  const run = pickRun();
   const { summarize, readMeta } = await import("../lib/runs.mjs");
   const s = summarize(run), m = readMeta(run);
   const ru = m.reviewUsage || {};

@@ -5,9 +5,9 @@ description: Build a feature or app with the planner-worker-reviewer pattern on 
 
 # /is-worker — planner-worker-reviewer on IndicStack
 
-Harness home: `${CLAUDE_PLUGIN_ROOT}` (call it HOME; it is this plugin's folder). Project: the current working directory (call it PROJECT). Everything per project lives in `PROJECT/.is-worker/`. Run every harness command with `IS_WORKER_PROJECT=PROJECT` in the environment. The same steps, packaged for Cursor, Codex, OpenCode and Antigravity, are in `${CLAUDE_PLUGIN_ROOT}/AGENTS.md`; the two files must agree from "Ground rules" onward (tests/init.test.mjs checks this).
+Harness home: `${CLAUDE_PLUGIN_ROOT}` (call it HARNESS; it is this plugin's folder). Project: the current working directory (call it PROJECT). Everything per project lives in `PROJECT/.is-worker/`. Run every harness command with `IS_WORKER_PROJECT=PROJECT` in the environment. The same steps, packaged for Cursor, Codex, OpenCode and Antigravity, are in `${CLAUDE_PLUGIN_ROOT}/AGENTS.md`; the two files must agree from "Ground rules" onward (tests/init.test.mjs checks this).
 
-Ground rules (from `HOME/explainer.html`):
+Ground rules (from `HARNESS/explainer.html`):
 - You never write an identifier, path, or number from memory into results. Numbers come from the logs; the `table` command prints them.
 - You do not write ticket code yourself unless a ticket lands in `claude-queue.jsonl` after the worker failed twice.
 - Keep the API key out of chat, files in the repo, and logs. Never ask the user to paste it here.
@@ -48,7 +48,7 @@ Write each test under `PROJECT/.is-worker/tests/` BEFORE any ticket runs (`node:
 Say: "N tickets, IndicStack, about ₹X" (X from the last calibration run's cost if any, else say unknown). Wait for "go". Then `node "${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs" run --project PROJECT`. It writes code into PROJECT, checks every ticket, re-runs earlier tickets' tests after each one. Queued tickets: write them yourself and submit with `node "${CLAUDE_PLUGIN_ROOT}/check.mjs" --run <run> --ticket N --files <json>` (with `IS_WORKER_PROJECT=PROJECT` in the environment).
 
 ## Step 6 — review and table
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs" review --project PROJECT` runs a blind session of the selected reviewer CLI in an isolated folder: `claude` with Opus by default (about ₹50), or `--reviewer codex`, `--reviewer opencode`, or `--reviewer custom` (a command template in `IS_WORKER_REVIEW_CMD`; see `HOME/README.md`). Pick the one your IDE ships with: Claude Code → claude, Cursor → claude or codex, Codex CLI → codex, OpenCode → opencode, Antigravity → claude, codex or custom. If that CLI is missing the review is skipped and the table says so. Then `node "${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs" table --project PROJECT`. Paste the table as-is. Then give the user one way to try the result (a URL, a command, or a file to open). Turn any finding the review repeats into a new test before the next milestone.
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs" review --project PROJECT` runs a blind session of the selected reviewer CLI in an isolated folder: `claude` with Opus by default (about ₹50), or `--reviewer codex`, `--reviewer opencode`, or `--reviewer custom` (a command template in `IS_WORKER_REVIEW_CMD`; see `HARNESS/README.md`). Pick the one your IDE ships with: Claude Code → claude, Cursor → claude or codex, Codex CLI → codex, OpenCode → opencode, Antigravity → claude, codex or custom. If that CLI is missing the review is skipped and the table says so. Then `node "${CLAUDE_PLUGIN_ROOT}/scripts/is-worker.mjs" table --project PROJECT`. Paste the table as-is. Then give the user one way to try the result (a URL, a command, or a file to open). Turn any finding the review repeats into a new test before the next milestone.
 
 ## Step 7 — next milestone
 Commit on a branch named after the milestone (ask before pushing). Say "next" to continue with the next milestone from Step 3.

@@ -2,9 +2,9 @@
 
 For Cursor, OpenAI Codex CLI, OpenCode, Google Antigravity, Claude Code, or any other agent that reads this file. When the user says "use is-worker to build …", "/is-worker …", or attaches a PRD and names is-worker, follow the steps below exactly and in order. You are the planner; IndicStack's Qwen model is the worker that writes every ticket; the harness scripts check every answer; a separate blind CLI session reviews the result.
 
-Harness home: `IS_WORKER_HOME` (call it HOME; the folder the is-worker harness was cloned to. `node <harness>/scripts/is-worker.mjs init --project <dir> --ide <ide>` writes this file into a project with the real path filled in). Project: the current working directory (call it PROJECT). Everything per project lives in `PROJECT/.is-worker/`. Run every harness command with `IS_WORKER_PROJECT=PROJECT` in the environment.
+Harness home: `IS_WORKER_HOME` (call it HARNESS; the folder the is-worker harness was cloned to. `node <harness>/scripts/is-worker.mjs init --project <dir> --ide <ide>` writes this file into a project with the real path filled in). Project: the current working directory (call it PROJECT). Everything per project lives in `PROJECT/.is-worker/`. Run every harness command with `IS_WORKER_PROJECT=PROJECT` in the environment.
 
-Ground rules (from `HOME/explainer.html`):
+Ground rules (from `HARNESS/explainer.html`):
 - You never write an identifier, path, or number from memory into results. Numbers come from the logs; the `table` command prints them.
 - You do not write ticket code yourself unless a ticket lands in `claude-queue.jsonl` after the worker failed twice.
 - Keep the API key out of chat, files in the repo, and logs. Never ask the user to paste it here.
@@ -45,7 +45,7 @@ Write each test under `PROJECT/.is-worker/tests/` BEFORE any ticket runs (`node:
 Say: "N tickets, IndicStack, about ₹X" (X from the last calibration run's cost if any, else say unknown). Wait for "go". Then `node "IS_WORKER_HOME/scripts/is-worker.mjs" run --project PROJECT`. It writes code into PROJECT, checks every ticket, re-runs earlier tickets' tests after each one. Queued tickets: write them yourself and submit with `node "IS_WORKER_HOME/check.mjs" --run <run> --ticket N --files <json>` (with `IS_WORKER_PROJECT=PROJECT` in the environment).
 
 ## Step 6 — review and table
-`node "IS_WORKER_HOME/scripts/is-worker.mjs" review --project PROJECT` runs a blind session of the selected reviewer CLI in an isolated folder: `claude` with Opus by default (about ₹50), or `--reviewer codex`, `--reviewer opencode`, or `--reviewer custom` (a command template in `IS_WORKER_REVIEW_CMD`; see `HOME/README.md`). Pick the one your IDE ships with: Claude Code → claude, Cursor → claude or codex, Codex CLI → codex, OpenCode → opencode, Antigravity → claude, codex or custom. If that CLI is missing the review is skipped and the table says so. Then `node "IS_WORKER_HOME/scripts/is-worker.mjs" table --project PROJECT`. Paste the table as-is. Then give the user one way to try the result (a URL, a command, or a file to open). Turn any finding the review repeats into a new test before the next milestone.
+`node "IS_WORKER_HOME/scripts/is-worker.mjs" review --project PROJECT` runs a blind session of the selected reviewer CLI in an isolated folder: `claude` with Opus by default (about ₹50), or `--reviewer codex`, `--reviewer opencode`, or `--reviewer custom` (a command template in `IS_WORKER_REVIEW_CMD`; see `HARNESS/README.md`). Pick the one your IDE ships with: Claude Code → claude, Cursor → claude or codex, Codex CLI → codex, OpenCode → opencode, Antigravity → claude, codex or custom. If that CLI is missing the review is skipped and the table says so. Then `node "IS_WORKER_HOME/scripts/is-worker.mjs" table --project PROJECT`. Paste the table as-is. Then give the user one way to try the result (a URL, a command, or a file to open). Turn any finding the review repeats into a new test before the next milestone.
 
 ## Step 7 — next milestone
 Commit on a branch named after the milestone (ask before pushing). Say "next" to continue with the next milestone from Step 3.

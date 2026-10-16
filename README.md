@@ -69,6 +69,8 @@ Step-by-step with screenshots, from sign-up to the first table: [docs/USER-GUIDE
 
 ![workflow](docs/workflow.svg)
 
+Shown for Claude Code; Cursor, Codex, OpenCode and Antigravity follow the same flow, with the reviewer of your choice at the blind-review step.
+
 ## Use
 
 Open any project folder in Claude Code and type `/is-worker` followed by your idea, or attach a PRD. The skill asks a few questions, writes a frozen brief, tickets and tests, waits for your go, runs IndicStack on every ticket, runs a blind review, and prints a one-row table (tokens, ₹ cost, tests, findings, time).

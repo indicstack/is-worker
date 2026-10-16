@@ -13,8 +13,11 @@ import { spawnSync } from "node:child_process";
 
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
 if (!args.run) { console.error("usage: node review/make-review.mjs --run runs/<id> [--out dir]"); process.exit(2); }
-loadBrief();
+// Fail in one line (exit 2), never with a stack trace: a bad --run or a missing/unfrozen brief are user errors.
 const runDir = resolve(ROOT, args.run);
+if (!existsSync(resolve(runDir, "meta.json"))) { console.error(`no run at ${runDir} (no meta.json)`); process.exit(2); }
+if (!existsSync(BRIEF_PATH)) { console.error(`no brief at ${BRIEF_PATH}`); process.exit(2); }
+try { loadBrief(); } catch (e) { console.error(e.message); process.exit(2); }
 const work = runPaths(runDir).work;
 if (!existsSync(work)) { console.error(`no work dir ${work}`); process.exit(2); }
 const outBase = resolve(String(args.out || resolve(homedir(), "eval-isolated")));
