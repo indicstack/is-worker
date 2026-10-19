@@ -1,6 +1,49 @@
-# IndicStack worker (/is-worker) — planner-worker-reviewer on IndicStack
+<div align="center">
 
-## Quick start
+<img src="https://indicstack.ai/logo/is-logo-element.png" alt="IndicStack" height="56">
+
+<h1>IndicStack worker</h1>
+
+<p>Planner-worker-reviewer on IndicStack: your IDE plans and reviews, IndicStack's Qwen model writes every ticket, scripts check every answer.</p>
+
+<p>
+<img src="https://img.shields.io/badge/version-0.7.2-FF6602?style=flat-square&labelColor=18191B" alt="version 0.7.2">
+<img src="https://img.shields.io/badge/node-18%2B-FF6602?style=flat-square&labelColor=18191B" alt="Node 18+">
+<img src="https://img.shields.io/badge/runs%20on-Mac%20%C2%B7%20Windows%20%C2%B7%20Linux-FF6602?style=flat-square&labelColor=18191B" alt="Mac, Windows, Linux">
+<img src="https://img.shields.io/badge/inference-in%20India-FF6602?style=flat-square&labelColor=18191B" alt="Inference in India">
+</p>
+
+<p>
+<a href="#quick-start-claude-code">Quick start</a> ·
+<a href="#other-agentic-ides">Other IDEs</a> ·
+<a href="docs/USER-GUIDE.md">Guide</a> ·
+<a href="docs/data-flow.html">Data flow</a> ·
+<a href="https://console.indicstack.ai">Console</a>
+</p>
+
+</div>
+
+![IndicStack worker: Planner, Worker, Reviewer](docs/img/banner.svg)
+
+## What it does
+
+| Planner | Worker | Checker |
+|---|---|---|
+| Your IDE's model. It asks a few questions, writes a frozen brief, the tickets and their tests, and runs the blind review. | IndicStack's `qwen38-27b` writes every ticket, at temperature 0. | Plain Node scripts run the tests after every ticket. Nothing is accepted on faith. |
+
+Every milestone ends with a one-row table: tokens, ₹ cost, tests, findings, time. Pattern: `explainer.html` (Prasanth Ghanta, Oct 2026).
+
+## Works with
+
+| IDE | Reads | `init --ide` | Reviewer to pick (`--reviewer` or `IS_WORKER_REVIEWER`) |
+|---|---|---|---|
+| Claude Code | the plugin skill (`/is-worker`) | `claude` (prints the two plugin commands) | `claude` (default; Sonnet, `--model opus` for a deeper look) |
+| Cursor | `.cursor/rules/is-worker.mdc` and `AGENTS.md` | `cursor` | `claude` if the claude CLI is installed, else `codex` |
+| OpenAI Codex CLI | `AGENTS.md` | `codex` | `codex` |
+| OpenCode | `AGENTS.md` | `opencode` | `opencode` |
+| Google Antigravity | `AGENTS.md` and `.agent/rules/is-worker.md` | `antigravity` | `claude`, `codex`, or `custom` |
+
+## Quick start (Claude Code)
 
 Copy the text below and paste it into the Claude Code prompt box (the message field at the bottom of the Claude Code window, or the `claude` prompt in your terminal). Claude Code does the rest: it installs the plugin from this repository, checks your IndicStack connection, and starts `/is-worker`.
 
@@ -12,34 +55,37 @@ Set up IndicStack for me from https://github.com/indicstack/is-worker, step by s
 4. Then start /is-worker with the idea or PRD I give you next.
 ```
 
+Or run the two plugin commands yourself inside Claude Code, then type `/is-worker` with your idea:
+```
+/plugin marketplace add IndicStack/is-worker
+/plugin install is-worker@indicstack
+```
+
 No IndicStack account yet? Sign up at https://console.indicstack.ai/signup. New accounts receive ₹2,000 of free credit, with no credit card required.
 
-Claude plans and reviews. IndicStack's Qwen model writes every ticket. Plain Node scripts check every answer. Pattern: `explainer.html` (Prasanth Ghanta, Oct 2026).
+## Other agentic IDEs
 
-## Use with other agentic IDEs (Cursor, Codex, OpenCode, Antigravity)
+Cursor, Codex CLI, OpenCode, Antigravity. The Claude Code plugin is one packaging. The same planner steps live in [AGENTS.md](AGENTS.md), and the harness scripts are plain Node that never depend on which IDE drives them. Three steps:
 
-The Claude Code plugin is one packaging. The same planner steps live in [AGENTS.md](AGENTS.md), and the harness scripts are plain Node that never depend on which IDE drives them. Three steps:
-
-1. **Clone the harness to a fixed folder** (the project files written in step 2 point at it, so it must stay put):
-   ```
-   git clone https://github.com/IndicStack/is-worker ~/is-worker
-   ```
-2. **Run `init` in your project.** It writes the planner instructions where your IDE reads them, with the harness path filled in. An existing `AGENTS.md` is never overwritten: a marked `<!-- is-worker:start -->…<!-- is-worker:end -->` section is appended, or replaced if it is already there.
-   ```
-   node ~/is-worker/scripts/is-worker.mjs init --project . --ide cursor
-   ```
-   `--ide` is one of `claude|cursor|codex|opencode|antigravity|all`.
+1. **Clone the harness to a fixed folder** (the project files written in step 2 point at it, so it must stay put), then save your IndicStack key in your own terminal, never in chat.
+2. **Run `init` in your project.** It writes the planner instructions where your IDE reads them, with the harness path filled in. An existing `AGENTS.md` is never overwritten: a marked `<!-- is-worker:start -->…<!-- is-worker:end -->` section is appended, or replaced if it is already there. `--ide` is one of `claude|cursor|codex|opencode|antigravity|all`.
 3. **Open the project in the IDE and type** `use is-worker to build <your idea>` (or attach a PRD). The agent runs the connection check first, then questions → brief → tickets and tests → run → blind review → table, exactly like `/is-worker`.
 
-| IDE | Reads | `init --ide` | Reviewer to pick (`--reviewer` or `IS_WORKER_REVIEWER`) |
-|---|---|---|---|
-| Claude Code | the plugin skill (`/is-worker`) | `claude` (prints the two plugin commands) | `claude` (default; Opus) |
-| Cursor | `.cursor/rules/is-worker.mdc` and `AGENTS.md` | `cursor` | `claude` if the claude CLI is installed, else `codex` |
-| OpenAI Codex CLI | `AGENTS.md` | `codex` | `codex` |
-| OpenCode | `AGENTS.md` | `opencode` | `opencode` |
-| Google Antigravity | `AGENTS.md` and `.agent/rules/is-worker.md` | `antigravity` | `claude`, `codex`, or `custom` |
+| Step | macOS / Linux | Windows |
+|---|---|---|
+| Clone the harness | `git clone https://github.com/IndicStack/is-worker ~/is-worker` | `git clone https://github.com/IndicStack/is-worker %USERPROFILE%\is-worker` |
+| Save the key | `node ~/is-worker/scripts/key.mjs` | `node "%USERPROFILE%\is-worker\scripts\key.mjs"` |
+| Init your project | `node ~/is-worker/scripts/is-worker.mjs init --project . --ide cursor` | `node "%USERPROFILE%\is-worker\scripts\is-worker.mjs" init --project . --ide cursor` |
+| Check the connection | `node ~/is-worker/scripts/is-worker.mjs doctor --project .` | `node "%USERPROFILE%\is-worker\scripts\is-worker.mjs" doctor --project .` |
 
-The blind review is a second, headless CLI session in an isolated folder. It defaults to `claude` (Opus). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, and `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`. Only the claude reviewer reports tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
+The blind review is a second, headless CLI session in an isolated folder. It defaults to `claude` with Sonnet (`--model opus` for a deeper look). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, and `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`. Only the claude reviewer reports tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
+
+## What's new in 0.7.2
+
+- The review skips itself when every ticket passed first try and all tests are green; `--force` runs it anyway.
+- Otherwise it reviews only the files of tickets that were retried or failed; `--full` reviews everything.
+- The default reviewer model is Sonnet; `--model opus` for a deeper look.
+- Size gate: a build likely under ~15 KB of code is offered as a direct build instead; tickets get 2–3 tests each.
 
 ## Install (Mac, Windows, Linux)
 
@@ -77,14 +123,15 @@ Open any project folder in Claude Code and type `/is-worker` followed by your id
 
 Per-project files live in `<project>/.is-worker/` (brief, tickets, tests, runs, state). Run logs are git-ignored.
 
-
 ## Layout
 
 - `skills/is-worker/SKILL.md` — the recipe Claude follows (the /is-worker command)
 - `AGENTS.md` — the same recipe for any coding agent (Cursor, Codex, OpenCode, Antigravity); `init` copies it into a project
 - `scripts/is-worker.mjs` — init, doctor, status, preflight, run, review, table
+- `scripts/key.mjs` — saves the IndicStack key (hidden input)
 - `lib/init.mjs`, `lib/reviewer.mjs` — the per-IDE instruction files and the pluggable blind reviewer (claude, codex, opencode, custom)
 - `docs/workflow.svg` — the end-to-end flow from prompt to table
+- `docs/data-flow.html` — what goes where, element by element
 - `worker.mjs`, `check.mjs`, `probe.mjs`, `calibrate.mjs`, `lib/` — the harness
 - `review/` — isolated blind review folder builder and its byte-identical prompt
 - `BRIEF.md`, `tickets.jsonl`, `tests/` — the Flappy Bird bench task
@@ -98,3 +145,7 @@ If you installed `pwris@indicstack` or `is@indicstack` before 12 Oct 2026:
 /plugin marketplace add IndicStack/is-worker
 /plugin install is-worker@indicstack
 ```
+
+---
+
+<p align="center">Built by IndicStack · <a href="https://console.indicstack.ai">console.indicstack.ai</a> · inference runs in India, nothing is trained on your data.</p>

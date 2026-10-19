@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-labelledby="t d" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="t">IndicStack worker</title>
+  <desc id="d">Planner, Worker, Reviewer: your IDE plans and reviews, IndicStack's Qwen model writes every ticket, scripts check every answer. Works with Claude Code, Cursor, Codex CLI, OpenCode and Antigravity.</desc>
+
+  <!-- card -->
+  <rect x="0" y="0" width="1200" height="320" fill="#F7F7F8"/>
+  <rect x="0" y="0" width="6" height="320" fill="#FF6602"/>
+  <rect x="0.5" y="0.5" width="1199" height="319" fill="none" stroke="#E6E7EA" stroke-width="1"/>
+
+  <!-- title -->
+  <text x="56" y="80" font-size="44" font-weight="700" fill="#18191B" letter-spacing="-0.5">IndicStack worker</text>
+
+  <!-- /is-worker code chip, top right -->
+  <rect x="994" y="48" width="150" height="36" rx="8" fill="#FF6602"/>
+  <text x="1069" y="72" text-anchor="middle" font-size="18" font-weight="700" fill="#FFFFFF" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/is-worker</text>
+
+  <!-- subtitle -->
+  <text font-size="20" fill="#6B7280">
+    <tspan x="56" y="122">Planner · Worker · Reviewer — your IDE plans and reviews,</tspan>
+    <tspan x="56" y="150">IndicStack's Qwen model writes every ticket, scripts check every answer</tspan>
+  </text>
+
+  <!-- works-with chips -->
+  <text x="56" y="205" font-size="12" font-weight="600" fill="#6B7280" letter-spacing="1.2">WORKS WITH</text>
+  <g font-size="15" font-weight="500" fill="#18191B" text-anchor="middle">
+    <rect x="152" y="182" width="120" height="36" rx="18" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="212" y="205">Claude Code</text>
+    <rect x="284" y="182" width="84" height="36" rx="18" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="326" y="205">Cursor</text>
+    <rect x="380" y="182" width="104" height="36" rx="18" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="432" y="205">Codex CLI</text>
+    <rect x="496" y="182" width="98" height="36" rx="18" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="545" y="205">OpenCode</text>
+    <rect x="606" y="182" width="120" height="36" rx="18" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="666" y="205">Antigravity</text>
+  </g>
+
+  <!-- plan / write / check strip -->
+  <g font-size="14">
+    <rect x="56" y="246" width="330" height="46" rx="8" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="72" y="274"><tspan font-weight="600" fill="#18191B">Plan</tspan><tspan fill="#6B7280"> — your IDE: brief, tickets, tests</tspan></text>
+    <path d="M396 269 H425 M418 262 L426 269 L418 276" fill="none" stroke="#FF6602" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="435" y="246" width="330" height="46" rx="8" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="451" y="274"><tspan font-weight="600" fill="#18191B">Write</tspan><tspan fill="#6B7280"> — IndicStack Qwen, temperature 0</tspan></text>
+    <path d="M775 269 H804 M797 262 L805 269 L797 276" fill="none" stroke="#FF6602" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="814" y="246" width="330" height="46" rx="8" fill="#FFFFFF" stroke="#E6E7EA"/>
+    <text x="830" y="274"><tspan font-weight="600" fill="#18191B">Check &amp; review</tspan><tspan fill="#6B7280"> — scripts run every test</tspan></text>
+  </g>
+</svg>

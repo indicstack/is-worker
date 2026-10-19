@@ -126,7 +126,7 @@ Say **next** for the next milestone, or **status** at any time for a one-line su
 | Findings | Logic findings the blind reviewer raised |
 | Total cost, total time | Worker plus review |
 
-From real runs in October 2026: a 15-ticket milestone cost about ₹9 on IndicStack and about ₹75 for the Opus review. The review is the expensive part; the typing is nearly free.
+From real runs in October 2026: a 15-ticket milestone cost about ₹9 on IndicStack and about ₹75 for the Opus review. The review is the expensive part; the typing is nearly free. Since v0.7.2 the review skips itself on a clean run (every ticket first try, all tests green), reviews only the troubled tickets otherwise, and uses Sonnet by default, so that ₹75 is now the exception rather than the rule.
 
 ## 8. Where things live
 
