@@ -1,6 +1,6 @@
 // Builds a fresh isolated review folder outside this project: BRIEF.md, DIFF.md (the run's game files
 // as a unified diff against an empty tree), and a byte-identical PROMPT-REVIEW.md. Then leak-scans it.
-//   node review/make-review.mjs --run runs/<id> [--out ~/eval-isolated]
+//   node review/make-review.mjs --run runs/<id> [--out ~/eval-isolated] [--tickets 3,5]
 import { mkdirSync, readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative, join } from "node:path";
 import { homedir } from "node:os";
@@ -35,7 +35,9 @@ const newFileDiff = (rel, abs) => { const lines = readFileSync(abs, "utf8").spli
 let text = "";
 let prefix = "";
 if (WORK_ROOT) {
-  const files = [...new Set(loadTickets().flatMap((t) => t.writes))].filter((f) => existsSync(resolve(work, f))).sort();
+  // --tickets 3,5 limits the diff to those tickets' files (the orchestrator passes the retried or failed ones)
+  const pick = args.tickets ? new Set(String(args.tickets).split(",").map(Number)) : null;
+  const files = [...new Set(loadTickets().filter((t) => !pick || pick.has(Number(t.id))).flatMap((t) => t.writes))].filter((f) => existsSync(resolve(work, f))).sort();
   const isGit = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: work, encoding: "utf8" }).stdout?.trim() === "true";
   for (const f of files) {
     const tracked = isGit && spawnSync("git", ["ls-files", "--error-unmatch", f], { cwd: work }).status === 0;

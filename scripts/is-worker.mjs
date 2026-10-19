@@ -1,6 +1,6 @@
 // /is-worker orchestrator: IndicStack-only planner-worker-reviewer for any project.
 //   node scripts/is-worker.mjs <cmd> --project <dir> [...]
-//   cmds: init [--ide claude|cursor|codex|opencode|antigravity|all] | doctor | status | preflight | run | review [--reviewer claude|codex|opencode|custom] [--model m] | table [--rate INR_PER_USD]
+//   cmds: init [--ide claude|cursor|codex|opencode|antigravity|all] | doctor | status | preflight | run | review [--reviewer claude|codex|opencode|custom] [--model m] [--force] [--full] | table [--rate INR_PER_USD]
 //   doctor exit codes: 0 ready, 3 key missing, 4 key rejected by IndicStack, 5 IndicStack unreachable, 6 selected reviewer CLI not found
 //   The reviewer is also picked by IS_WORKER_REVIEWER; "custom" runs the IS_WORKER_REVIEW_CMD template (see lib/reviewer.mjs).
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
@@ -150,8 +150,17 @@ async function review() {
   const run = pickRun();
   const { runReview, selectedReviewer } = await import("../lib/reviewer.mjs");
   let name; try { name = selectedReviewer(args.reviewer); } catch (e) { die(e.message); }
-  const model = args.model ? String(args.model) : name === "claude" ? "opus" : null; // other CLIs use their own default model unless --model is given
-  const mk = node("review/make-review.mjs", ["--run", run], { quiet: true });
+  // A clean run (every ticket passed first try, every test green) gains little from a frontier review; skip it unless --force.
+  const { summarize } = await import("../lib/runs.mjs");
+  const s = summarize(run);
+  const clean = s.tickets_total && s.tickets_passed_first_try === s.tickets_total && s.tests_final && s.tests_final.fail === 0;
+  if (clean && !args.force) { say(`review: skipped — clean run (${s.tickets_passed_first_try}/${s.tickets_total} first try, ${s.tests_final.pass} tests green). Pass --force to review anyway.`); return; }
+  // sonnet by default: the review reads the whole project, so it is the biggest frontier bill; --model opus for a deeper look
+  const model = args.model ? String(args.model) : name === "claude" ? "sonnet" : null; // other CLIs use their own default model unless --model is given
+  // Review only the tickets that needed retries or failed (the clean ones were already proven by their tests); --full reviews everything.
+  const only = !args.full && s.tickets_troubled.length && s.tickets_troubled.length < s.tickets_total ? ["--tickets", s.tickets_troubled.join(",")] : [];
+  if (only.length) say(`review: only tickets ${s.tickets_troubled.join(", ")} (retried or failed). Pass --full to review every ticket.`);
+  const mk = node("review/make-review.mjs", ["--run", run, ...only], { quiet: true });
   if (mk.status !== 0) die(`review folder not built: ${firstError(mk.stderr || mk.stdout)}`);
   const meta = readJson(resolve(run, "meta.json"));
   say(`review folder: ${meta.reviewFolder}`);
