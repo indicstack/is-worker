@@ -1,0 +1,41 @@
+{
+  "_note": "Piece 2: the planner writes the typed checklist per ticket from the brief, instead of a fixed three-question list. Written by Claude (planner) on 21 Oct 2026 from BRIEF.md and tickets.jsonl. Disclosure: the planner had already seen option B's five findings; three statements (restart reseed, storage errors, key auto-repeat) are the kind a planner would write anyway but were written knowing them. YES = fine. 'cross' statements are judged against every game file.",
+  "score": { "id": "risk", "text": "How likely is it that this ticket's code has a bug the tests would not catch?", "levels": ["Clearly correct, nothing to check", "Minor doubt, probably fine", "Likely a bug somewhere", "Clearly broken"] },
+  "1": [
+    { "id": "1.render-order", "text": "render fills the sky over the whole canvas, then the ground band from GROUND_Y to CANVAS_H, then the bird rectangle at state.bird, using fillRect only." },
+    { "id": "1.dt", "text": "The loop computes dt in seconds from the frame timestamp and caps it at MAX_DT before any use, including the very first frame." }
+  ],
+  "2": [
+    { "id": "2.step-order", "text": "step adds GRAVITY*dt to vy first, then adds vy*dt to y, and when y would go below 0 it sets y to 0 and vy to 0." },
+    { "id": "2.pure", "text": "flap and step return new objects and leave the bird they were given unchanged." }
+  ],
+  "3": [
+    { "id": "3.scroll-then-spawn", "text": "stepPipes scrolls every pipe left by PIPE_SPEED*dt first, then spawns while timer >= SPAWN_INTERVAL, subtracting SPAWN_INTERVAL each time, and removes pairs whose x + PIPE_W is below 0." },
+    { "id": "3.gap", "text": "gapY is computed exactly as GAP_MIN_Y + Math.floor(rng() * (GAP_MAX_Y - GAP_MIN_Y + 1))." },
+    { "id": "3.rng", "text": "createRng(seed) returns a function giving the same sequence in [0, 1) for the same seed, and it is the only source of randomness." },
+    { "id": "3.pure", "text": "stepPipes returns a new pipes object and a new list; the pipes it was given are unchanged." }
+  ],
+  "4": [
+    { "id": "4.strict", "text": "rectsOverlap returns false when two rectangles only touch at an edge." },
+    { "id": "4.rects", "text": "pipeRects returns the top rect from y 0 to gapY and the bottom rect from gapY + GAP_H to GROUND_Y, both PIPE_W wide at the pipe's x." },
+    { "id": "4.ground", "text": "hitsGround returns true exactly when bird.y + bird.h >= GROUND_Y." }
+  ],
+  "5": [
+    { "id": "5.once", "text": "updateScore adds 1 once per pair, when x + PIPE_W is at or left of BIRD_X, and marks passed on a new pipe object rather than mutating the old one." },
+    { "id": "5.loadBest", "text": "loadBest returns 0 when the stored value is missing or not a number, and the stored integer otherwise." },
+    { "id": "5.saveBest", "text": "saveBest writes String(best) under BEST_KEY and nothing else." }
+  ],
+  "6": [
+    { "id": "6.input", "text": "handleInput in start begins play and flaps once; in playing it flaps; in over it returns a fresh start state that keeps best." },
+    { "id": "6.tick-order", "text": "tick in playing caps dt at MAX_DT, steps the bird, steps the pipes, updates the score, then checks collision and ground and sets mode over with best = max(best, score); in other modes it returns the state unchanged." },
+    { "id": "6.screens", "text": "The start screen draws 'Flappy' and 'tap to start'; play draws score and best; the game-over screen draws 'game over', the score, the best and 'tap to restart'." }
+  ],
+  "cross": [
+    { "id": "x.reseed", "text": "A new game after game over gets a different pipe sequence from the previous game, because the seed used for play is not reused unchanged on restart." },
+    { "id": "x.rng-shared", "text": "Calling tick twice on the same state object gives the same result both times; no hidden mutable generator is shared between state copies." },
+    { "id": "x.best-write", "text": "main.mjs writes best to storage only when a game ends with a score above the stored best." },
+    { "id": "x.storage-errors", "text": "An exception thrown by storage.getItem or storage.setItem cannot stop the animation loop or prevent start from binding input." },
+    { "id": "x.auto-repeat", "text": "Holding Space down does not flap repeatedly or skip the game-over screen (key auto-repeat is ignored)." },
+    { "id": "x.dom", "text": "Only main.mjs touches the DOM, timers, requestAnimationFrame or localStorage; every other module is pure." }
+  ]
+}

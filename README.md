@@ -78,7 +78,16 @@ Cursor, Codex CLI, OpenCode, Antigravity. The Claude Code plugin is one packagin
 | Init your project | `node ~/is-worker/scripts/is-worker.mjs init --project . --ide cursor` | `node "%USERPROFILE%\is-worker\scripts\is-worker.mjs" init --project . --ide cursor` |
 | Check the connection | `node ~/is-worker/scripts/is-worker.mjs doctor --project .` | `node "%USERPROFILE%\is-worker\scripts\is-worker.mjs" doctor --project .` |
 
-The blind review is a second, headless CLI session in an isolated folder. It defaults to `claude` with Sonnet (`--model opus` for a deeper look). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, and `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`. Only the claude reviewer reports tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
+The blind review is a second, headless session in an isolated folder. It defaults to `claude` with Opus for the typed call (Sonnet for `--full`; `--model` overrides). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`, and `--reviewer openrouter` posts the folder to OpenRouter with no CLI at all. Only the claude and openrouter reviewers report tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
+
+## What's new in 0.8.0 — typed review
+
+The blind review no longer reads the whole project and writes prose. The planner writes a checklist with the tickets (`.is-worker/checklist.json`: statements that are true when the code is fine, including cross-file ones, and one bug-risk score per ticket). `review` then runs in two halves: IndicStack's worker model judges every statement with one token and its logprobs (about ₹0.10 and 1 s each); the ones it is not sure about go to the frontier reviewer in ONE call over the files involved, answered as JSON. Every NO is a finding with file, line and reason. Flappy Bird, 21 Oct 2026, same code and tests: prose review ₹24.37 and 98 s with 5 findings; typed review ₹8.88 and 57 s with the same 5 findings (`experiments/typed-review/RESULTS.md`).
+
+- `review` is typed by default; `--full` is the old prose review (Sonnet, skipped on clean runs).
+- New reviewer `--reviewer openrouter`: no CLI needed; the blind folder goes to OpenRouter (`OPENROUTER_API_KEY` or `IS_WORKER_KEY_C`), exact cost comes back. Use it where `claude -p` is not allowed.
+- Gate settings live in `defaults.json` (`review_gate_threshold` 0.85, `review_gate_risk_open` 2.5, `review_models`), with the reason for each value.
+- `table` adds a note line: statements closed by the worker model, statements answered by the reviewer, and the cost of each.
 
 ## What's new in 0.7.2
 

@@ -1,8 +1,10 @@
 // /is-worker orchestrator: IndicStack-only planner-worker-reviewer for any project.
 //   node scripts/is-worker.mjs <cmd> --project <dir> [...]
-//   cmds: init [--ide claude|cursor|codex|opencode|antigravity|all] | doctor | status | preflight | run | review [--reviewer claude|codex|opencode|custom] [--model m] [--force] [--full] | table [--rate INR_PER_USD]
+//   cmds: init [--ide claude|cursor|codex|opencode|antigravity|all] | doctor | status | preflight | run | review [--reviewer claude|codex|opencode|custom|openrouter] [--model m] [--force] [--full] | table [--rate INR_PER_USD]
 //   doctor exit codes: 0 ready, 3 key missing, 4 key rejected by IndicStack, 5 IndicStack unreachable, 6 selected reviewer CLI not found
-//   The reviewer is also picked by IS_WORKER_REVIEWER; "custom" runs the IS_WORKER_REVIEW_CMD template (see lib/reviewer.mjs).
+//   The reviewer is also picked by IS_WORKER_REVIEWER; "custom" runs the IS_WORKER_REVIEW_CMD template, "openrouter" calls the API (see lib/reviewer.mjs).
+//   review is typed by default (0.8.0): the worker model gates the planner's checklist, the reviewer answers only the open
+//   statements over the whole code in one call. --full is the pre-0.8.0 prose review of the diff.
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,7 +56,7 @@ async function doctor() {
   let reviewerMissing = false;
   for (const s of reviewerStatus(selected)) {
     if (s.name === "custom" && !s.selected) continue;
-    const found = s.bin ? (s.name === "custom" ? "IS_WORKER_REVIEW_CMD set" : s.bin) : s.name === "custom" ? "IS_WORKER_REVIEW_CMD not set (blind reviews will not run)" : s.selected ? "NOT FOUND (blind reviews will not run)" : "not found";
+    const found = s.bin ? (s.name === "custom" ? "IS_WORKER_REVIEW_CMD set" : s.bin) : s.name === "custom" ? "IS_WORKER_REVIEW_CMD not set (blind reviews will not run)" : s.name === "openrouter" ? `no key${s.selected ? " (blind reviews will not run)" : ""}` : s.selected ? "NOT FOUND (blind reviews will not run)" : "not found";
     lines.push(`reviewer ${s.name}${s.selected ? " (selected)" : ""}: ${found}`);
     if (s.selected && !s.bin) reviewerMissing = true;
   }
@@ -81,7 +83,7 @@ async function doctor() {
     : code === 3 ? "IS-WORKER: NOT CONNECTED — no IndicStack key. Nothing may be planned or coded until it is saved."
     : code === 4 ? "IS-WORKER: NOT CONNECTED — IndicStack rejected the key. Save the correct key before anything else."
     : code === 5 ? "IS-WORKER: NOT CONNECTED — IndicStack unreachable. Check the network or ask ops; do not fall back to Claude writing the code."
-    : `IS-WORKER: DEGRADED — reviewer "${selected}" ${selected === "custom" ? "has no IS_WORKER_REVIEW_CMD" : "CLI not found"}; runs work, blind reviews will not (pick another with --reviewer claude|codex|opencode|custom).`;
+    : `IS-WORKER: DEGRADED — reviewer "${selected}" ${selected === "custom" ? "has no IS_WORKER_REVIEW_CMD" : selected === "openrouter" ? "has no key (OPENROUTER_API_KEY or IS_WORKER_KEY_C)" : "CLI not found"}; runs work, blind reviews will not (pick another with --reviewer claude|codex|opencode|custom|openrouter).`;
   say(banner); for (const l of lines) say("  " + l);
   if (code === 3 || code === 4) say(`\nTo save the key, run this in your own terminal (hidden input), then say "saved":\n  node "${resolve(HOME, "scripts", "key.mjs")}"`);
   process.exit(code);
@@ -149,36 +151,81 @@ async function run() {
 async function review() {
   const run = pickRun();
   const { runReview, selectedReviewer } = await import("../lib/reviewer.mjs");
+  const { summarize, updateMeta } = await import("../lib/runs.mjs");
+  const { DEFAULTS } = await import("../lib/settings.mjs");
   let name; try { name = selectedReviewer(args.reviewer); } catch (e) { die(e.message); }
-  // A clean run (every ticket passed first try, every test green) gains little from a frontier review; skip it unless --force.
-  const { summarize } = await import("../lib/runs.mjs");
   const s = summarize(run);
+  const mode = args.full ? "full" : "typed";
+  const model = args.model ? String(args.model) : DEFAULTS.review_models?.[name]?.[mode] ?? null; // CLIs without an entry use their own default
+  const unavailable = () => say("review unavailable: the tests already checked every ticket. Do NOT review by hand or with a subagent, and do not start a new brief or milestone from your own reading; show the table and stop.");
+  const record = (r, extra) => { const u = r.usage; updateMeta(run, { reviewer: name, reviewerModel: model, reviewMode: mode, reviewUsage: { input: u?.input ?? null, cache_write: u?.cache_write ?? null, cache_read: u?.cache_read ?? null, output: u?.output ?? null, cost_usd: u?.cost_usd ?? null, seconds: r.seconds, model: u?.model || model }, ...extra }); };
+
+  if (mode === "typed") {
+    // Same one-line brief checks make-review.mjs does, before any call is made.
+    const { BRIEF_PATH, loadBrief } = await import("../lib/brief.mjs");
+    if (!existsSync(BRIEF_PATH)) die(`review folder not built: no brief at ${BRIEF_PATH}`);
+    try { loadBrief(); } catch (e) { die(`review folder not built: ${e.message}`); }
+    // 1. The worker model judges every checklist statement (P(fine) from its logprobs); confident ones close for ~₹0.10 each.
+    const key = await keyFor();
+    if (!key) die("no IndicStack key: the typed review's gate runs on the worker model. Save the key (doctor says how) or pass --full.");
+    say(`review (typed): gate on ${s.model}, then ${name}${model ? ` (model ${model})` : ""} on the open statements`);
+    const g = node("review/typed-gate.mjs", ["--run", run], { env: { IS_WORKER_API_KEY: key } });
+    if (g.status !== 0) die("typed gate failed (see above). Pass --full for the prose review.");
+    const gate = readJson(resolve(run, "typed-gate.json"));
+    if (!gate.open) {
+      const verdict = `PASS — 0 findings (${gate.closed} statements closed by ${s.model}, nothing open)`;
+      updateMeta(run, { reviewer: name, reviewerModel: model, reviewMode: mode, reviewVerdict: verdict, reviewerCorrections: 0, reviewUsage: { input: 0, cache_write: 0, cache_read: 0, output: 0, cost_usd: 0, seconds: 0, model } });
+      say(`verdict: ${verdict}`); return;
+    }
+    // 2. One blind call over every file the open statements touch; the reviewer answers each statement as JSON.
+    const mk = node("review/make-review.mjs", ["--run", run, "--typed"], { quiet: true });
+    if (mk.status !== 0) die(`review folder not built: ${firstError(mk.stderr || mk.stdout)}`);
+    const meta = readJson(resolve(run, "meta.json"));
+    say(`review folder: ${meta.reviewFolder}`);
+    const r = await runReview({ name, folder: meta.reviewFolder, model, mode, maxTokens: DEFAULTS.review_answer_max_tokens });
+    if (r.skipped) { say(`review skipped: ${r.reason}. Install it, or choose another with --reviewer claude|codex|opencode|custom|openrouter (or IS_WORKER_REVIEWER).`); updateMeta(run, { reviewer: name, reviewerModel: model, reviewMode: mode, reviewVerdict: r.verdict }); return; }
+    if (r.status !== 0) say(`${name} exited ${r.status}${r.error ? ` (${r.error})` : ""}: ${(r.stderr || r.stdout).trim().split("\n").slice(-3).join(" | ").slice(0, 300)}`);
+    const ansPath = resolve(meta.reviewFolder, "ANSWERS.json");
+    if (!existsSync(ansPath)) { unavailable(); record(r, { reviewVerdict: `no ANSWERS.json written (${name} exited ${r.status})`, reviewerCorrections: null }); return; }
+    let arr = []; try { const p = JSON.parse(readFileSync(ansPath, "utf8").replace(/```json|```/g, "").trim()); arr = Array.isArray(p) ? p : p.answers || p.results || []; } catch { say("ANSWERS.json is not valid JSON"); }
+    const open = gate.items.filter((i) => i.open);
+    const findings = [], unanswered = [];
+    open.forEach((i, idx) => {
+      const a = arr.find((x) => String(x.id) === i.id) || arr[idx];
+      if (!a || !/^(YES|NO)$/i.test(String(a.answer))) { unanswered.push(i.id); return; }
+      if (/^NO$/i.test(String(a.answer))) findings.push({ id: i.id, file: a.file || i.files.join(", "), line: a.line ?? null, statement: i.text, why: a.why || "" });
+    });
+    const lines = findings.map((f, n) => `${n + 1}. ${f.file}${f.line != null ? `:${f.line}` : ""} — ${f.why} (statement ${f.id})`);
+    writeFileSync(resolve(meta.reviewFolder, "FINDINGS.md"), `# Findings\n\n${lines.join("\n") || "none"}\n${unanswered.length ? `\nUnanswered: ${unanswered.join(", ")}\n` : ""}`);
+    const verdict = `${findings.length ? "PASS WITH FINDINGS" : "PASS"} — ${findings.length} findings (${gate.closed} closed by ${s.model}, ${open.length} answered by ${name}${unanswered.length ? `, ${unanswered.length} unanswered` : ""})`;
+    record(r, { reviewVerdict: verdict, reviewerCorrections: findings.length, typedFindings: findings, typedUnanswered: unanswered });
+    for (const l of lines) say("  " + l);
+    say(`verdict: ${verdict}`);
+    return;
+  }
+
+  // --full: the pre-0.8.0 prose review of the diff. Skipped on a clean run; only troubled tickets unless --force.
   const clean = s.tickets_total && s.tickets_passed_first_try === s.tickets_total && s.tests_final && s.tests_final.fail === 0;
   if (clean && !args.force) { say(`review: skipped — clean run (${s.tickets_passed_first_try}/${s.tickets_total} first try, ${s.tests_final.pass} tests green). Pass --force to review anyway.`); return; }
-  // sonnet by default: the review reads the whole project, so it is the biggest frontier bill; --model opus for a deeper look
-  const model = args.model ? String(args.model) : name === "claude" ? "sonnet" : null; // other CLIs use their own default model unless --model is given
-  // Review only the tickets that needed retries or failed (the clean ones were already proven by their tests); --full reviews everything.
-  const only = !args.full && s.tickets_troubled.length && s.tickets_troubled.length < s.tickets_total ? ["--tickets", s.tickets_troubled.join(",")] : [];
-  if (only.length) say(`review: only tickets ${s.tickets_troubled.join(", ")} (retried or failed). Pass --full to review every ticket.`);
+  const only = args.force || !(s.tickets_troubled.length && s.tickets_troubled.length < s.tickets_total) ? [] : ["--tickets", s.tickets_troubled.join(",")];
+  if (only.length) say(`review: only tickets ${s.tickets_troubled.join(", ")} (retried or failed). Pass --force to review every ticket.`);
   const mk = node("review/make-review.mjs", ["--run", run, ...only], { quiet: true });
   if (mk.status !== 0) die(`review folder not built: ${firstError(mk.stderr || mk.stdout)}`);
   const meta = readJson(resolve(run, "meta.json"));
   say(`review folder: ${meta.reviewFolder}`);
   say(`reviewer: ${name}${model ? ` (model ${model})` : ""}`);
-  const { updateMeta } = await import("../lib/runs.mjs");
-  const r = runReview({ name, folder: meta.reviewFolder, model });
+  const r = await runReview({ name, folder: meta.reviewFolder, model, mode: "full", maxTokens: 16000 });
   if (r.skipped) {
-    say(`review skipped: ${r.reason}. Install it, or choose another with --reviewer claude|codex|opencode|custom (or IS_WORKER_REVIEWER).`);
-    updateMeta(run, { reviewer: name, reviewerModel: model, reviewVerdict: r.verdict });
+    say(`review skipped: ${r.reason}. Install it, or choose another with --reviewer claude|codex|opencode|custom|openrouter (or IS_WORKER_REVIEWER).`);
+    updateMeta(run, { reviewer: name, reviewerModel: model, reviewMode: mode, reviewVerdict: r.verdict });
     return;
   }
   if (r.status !== 0) say(`${name} exited ${r.status}${r.error ? ` (${r.error})` : ""}: ${(r.stderr || r.stdout).trim().split("\n").slice(-3).join(" | ").slice(0, 300)}`);
-  if (r.status !== 0 && !existsSync(resolve(meta.reviewFolder, "REVIEW.md"))) say("review unavailable: the tests already checked every ticket. Do NOT review by hand or with a subagent, and do not start a new brief or milestone from your own reading; show the table and stop.");
+  if (r.status !== 0 && !existsSync(resolve(meta.reviewFolder, "REVIEW.md"))) unavailable();
   const text = existsSync(resolve(meta.reviewFolder, "REVIEW.md")) ? readFileSync(resolve(meta.reviewFolder, "REVIEW.md"), "utf8") : "";
   const verdict = (text.match(/^.*\b(PASS WITH FINDINGS|PASS|FAIL)\b.*$/m) || [""])[0].replace(/^[#*\s-]+/, "").trim();
   const count = Number((verdict.match(/(\d+)/) || [])[1]);
-  const u = r.usage; // null when the CLI reports no tokens (codex, opencode, custom): the table shows "?" for those columns
-  updateMeta(run, { reviewer: name, reviewerModel: model, reviewVerdict: verdict, reviewerCorrections: Number.isFinite(count) ? count : null, reviewUsage: { input: u?.input ?? null, cache_write: u?.cache_write ?? null, cache_read: u?.cache_read ?? null, output: u?.output ?? null, cost_usd: u?.cost_usd ?? null, seconds: r.seconds, model: u?.model || model } });
+  record(r, { reviewVerdict: verdict, reviewerCorrections: Number.isFinite(count) ? count : null });
   say(`verdict: ${verdict || "(no REVIEW.md written)"}`);
 }
 
@@ -192,8 +239,15 @@ async function table() {
   let rate = Number(args.rate);
   if (!Number.isFinite(rate) && ru.cost_usd != null) { try { const j = await (await fetch("https://api.frankfurter.app/latest?from=USD&to=INR")).json(); rate = j.rates.INR; say(`rate: ₹${rate}/USD (frankfurter, ${j.date})`); } catch { die("could not fetch USD→INR; pass --rate"); } }
   const workerInr = s.cost ?? 0; // IndicStack reports cost in INR
-  const reviewInr = ru.cost_usd != null ? ru.cost_usd * rate : null;
-  const wall = s.wall_s || 0, rs = ru.seconds || 0;
+  // Typed review (0.8.0): the gate's worker-model calls are part of the review cost. IndicStack reports ₹ per call; when a
+  // call carries no cost, it is priced at this run's own ₹ per worker token.
+  const g = m.typedGate?.usage || null;
+  const gateTokens = g ? (g.prompt_tokens || 0) + (g.completion_tokens || 0) : 0;
+  const perToken = s.prompt_tokens + s.completion_tokens > 0 ? workerInr / (s.prompt_tokens + s.completion_tokens) : 0;
+  const gateInr = g ? (g.calls && g.cost_reported === g.calls ? g.cost : gateTokens * perToken) : 0;
+  const frontierInr = ru.cost_usd != null ? ru.cost_usd * rate : null;
+  const reviewInr = m.reviewMode === "typed" ? (frontierInr ?? 0) + gateInr : frontierInr;
+  const wall = s.wall_s || 0, rs = (ru.seconds || 0) + (g?.wall_seconds || 0);
   const fmt = (n) => Number(n).toLocaleString("en-IN");
   const tok = (v) => (v == null ? "?" : fmt(v));
   const inr = (v) => (v == null ? "?" : `₹${v.toFixed(2)}`);
@@ -201,9 +255,10 @@ async function table() {
   const row = `| ${m.id} (IndicStack ${m.model}) | ${fmt(s.prompt_tokens)} | ${fmt(s.completion_tokens)} | ₹${workerInr.toFixed(2)} | ${usageKnown ? fmt((ru.input || 0) + (ru.cache_write || 0) + (ru.cache_read || 0)) : "?"} | ${tok(ru.output)} | ${inr(reviewInr)} | ${s.tickets_passed_first_try}/${s.tickets_total} | ${s.tests_final ? `${s.tests_final.pass}/${s.tests_final.pass + s.tests_final.fail}` : "?"} | ${m.reviewerCorrections ?? "?"} | **₹${(workerInr + (reviewInr || 0)).toFixed(2)}** | ${mmss(wall + rs)} |`;
   const header = `| Run | Worker tokens in | Worker tokens out | Worker cost | ${who} review tokens in | ${who} review tokens out | ${who} review cost | First try | Final tests | Findings | Total cost | Total time |\n|---|---|---|---|---|---|---|---|---|---|---|---|`;
   let note = "";
-  if (/^skipped/.test(m.reviewVerdict || "")) note = `Review was ${m.reviewVerdict}; the total is the worker cost only.`;
-  else if (m.reviewer && m.reviewer !== "claude") note = `${who} reports no tokens or cost; the review columns show ? and the total is the worker cost only.`;
-  else if (Number.isFinite(rate)) {
+  if (m.reviewMode === "typed" && m.typedGate) note = `Typed review: ${m.typedGate.statements} statements${m.typedGate.checklist ? "" : " (generic: no checklist.json)"}, ${m.typedGate.closed} closed by ${m.model} (${fmt(gateTokens)} tokens, ₹${gateInr.toFixed(2)}, ${Math.round(g?.wall_seconds || 0)} s), ${m.typedGate.open} answered by ${who}${frontierInr != null ? ` (₹${frontierInr.toFixed(2)})` : ""}. ${m.reviewVerdict || ""}\n\n`;
+  if (/^skipped/.test(m.reviewVerdict || "")) note += `Review was ${m.reviewVerdict}; the total is the worker cost only.`;
+  else if (m.reviewer && !["claude", "openrouter"].includes(m.reviewer)) note += `${who} reports no tokens or cost; the review columns show ? and the total is the worker cost only.`;
+  else if (Number.isFinite(rate) && m.reviewer !== "openrouter") {
     try {
       const j = await (await fetch("https://openrouter.ai/api/v1/models")).json();
       const id = String(args["opus-id"] || "anthropic/claude-opus-5.5");
@@ -212,10 +267,11 @@ async function table() {
         const pm = (v) => Math.round(Number(v) * 1e8) / 100;
         const px = { in: pm(o.pricing.prompt), out: pm(o.pricing.completion), cr: pm(o.pricing.input_cache_read ?? 0), cw: pm(o.pricing.input_cache_write ?? 0) };
         const usd = ((ru.input || 0) * px.in + (ru.cache_read || 0) * px.cr + (ru.cache_write || 0) * px.cw + (ru.output || 0) * px.out) / 1e6;
-        note = `Opus list price (${id}, OpenRouter, ${new Date().toISOString().slice(0, 10)}): $${px.in}/M in, $${px.out}/M out, $${px.cr}/M cache read, $${px.cw}/M cache write. Review at these prices: ₹${(usd * rate).toFixed(2)}; Claude reported ₹${reviewInr.toFixed(2)}.`;
+        note += `Opus list price (${id}, OpenRouter, ${new Date().toISOString().slice(0, 10)}): $${px.in}/M in, $${px.out}/M out, $${px.cr}/M cache read, $${px.cw}/M cache write. Review at these prices: ₹${(usd * rate).toFixed(2)}; Claude reported ₹${frontierInr.toFixed(2)}.`;
       }
-    } catch { note = "(Opus list price lookup failed; review cost is Claude's reported figure)"; }
+    } catch { note += "(Opus list price lookup failed; review cost is Claude's reported figure)"; }
   }
+  note = note.trim();
   say(header + "\n" + row + (note ? "\n\n" + note : ""));
   writeFileSync(resolve(run, "TABLE.md"), header + "\n" + row + "\n" + (note ? "\n" + note + "\n" : ""));
 }
@@ -231,5 +287,5 @@ async function init() {
 }
 
 const cmds = { init, doctor, status, preflight, run, review, table };
-if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom]");
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));

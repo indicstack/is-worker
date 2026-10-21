@@ -4,13 +4,21 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { reviewers, runReview, fillTemplate, selectedReviewer, reviewerStatus, PROMPT, DEFAULT_REVIEWER } from "../lib/reviewer.mjs";
+import { reviewers, runReview, fillTemplate, selectedReviewer, reviewerStatus, PROMPT, PROMPT_TYPED, DEFAULT_REVIEWER } from "../lib/reviewer.mjs";
 
 const tmp = realpathSync(mkdtempSync(resolve(tmpdir(), "isw-rev-"))); // realpath: macOS tmpdir is a symlink and the child reports the resolved cwd
 after(() => rmSync(tmp, { recursive: true, force: true }));
 const base = { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, IS_WORKER_API_KEY: "secret-A", INDICSTACK_API_KEY: "secret-B" };
 
-test("reviewers table has claude, codex, opencode and custom", () => { assert.deepEqual(Object.keys(reviewers), ["claude", "codex", "opencode", "custom"]); for (const r of Object.values(reviewers)) { assert.equal(typeof r.bin, "function"); assert.equal(typeof r.usage, "function"); } });
+test("reviewers table has claude, codex, opencode, custom and openrouter", () => { assert.deepEqual(Object.keys(reviewers), ["claude", "codex", "opencode", "custom", "openrouter"]); for (const r of Object.values(reviewers)) { assert.equal(typeof r.bin, "function"); assert.equal(typeof r.usage, "function"); } });
+test("openrouter: no key → skipped; usage parsed from the API reply; typed mode names its prompt and output", () => {
+  assert.equal(reviewers.openrouter.bin({ ...base, IS_WORKER_KEY_C: "" }), null);
+  assert.ok(reviewers.openrouter.bin({ ...base, OPENROUTER_API_KEY: "k" }));
+  assert.deepEqual(reviewers.openrouter.usage({ usage: { prompt_tokens: 10, completion_tokens: 4, cost: 0.01, prompt_tokens_details: { cached_tokens: 3 } }, model: "m" }), { input: 10, cache_write: 0, cache_read: 3, output: 4, cost_usd: 0.01, model: "m" });
+  const r = runReview({ name: "openrouter", folder: tmp, mode: "typed", env: { ...base, IS_WORKER_KEY_C: "" } });
+  assert.equal(r.skipped, true); assert.match(r.reason, /OpenRouter key/);
+  assert.match(PROMPT_TYPED, /PROMPT-TYPED\.md.*ANSWERS\.json/);
+});
 test("claude keeps today's exact command and parses usage from the JSON line", () => {
   assert.deepEqual(reviewers.claude.args({ model: "opus" }), ["-p", "--model", "opus", "--output-format", "json", "--no-session-persistence", "--allowedTools", "Read", "Write", "Glob", "Grep"]);
   assert.equal(reviewers.claude.stdin, PROMPT);
@@ -38,7 +46,7 @@ test("selectedReviewer: default, flag, env, unknown", () => {
 test("reviewerStatus marks the selected one and honours *_BIN overrides only when the file exists", () => {
   const env = { ...base, CODEX_BIN: resolve(tmp, "no-such-codex"), OPENCODE_BIN: process.execPath };
   const st = Object.fromEntries(reviewerStatus("opencode", env).map((s) => [s.name, s]));
-  assert.equal(st.codex.bin, null); assert.equal(st.opencode.bin, process.execPath); assert.equal(st.opencode.selected, true); assert.equal(st.claude.selected, false); assert.equal(st.custom.bin, null);
+  assert.equal(st.codex.bin, null); assert.equal(st.opencode.bin, process.execPath); assert.equal(st.opencode.selected, true); assert.equal(st.claude.selected, false); assert.equal(st.custom.bin, null); assert.equal("openrouter" in st, true);
 });
 test("missing codex binary: skipped, no throw, verdict names the CLI", () => {
   const r = runReview({ name: "codex", folder: tmp, env: { ...base, CODEX_BIN: resolve(tmp, "no-such-codex") } });

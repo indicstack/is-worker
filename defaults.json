@@ -37,5 +37,22 @@
   "cache_hit_tps_threshold": 1000,
   "_cache_hit_tps_threshold": "planner choice, 9 Oct 2026: a call that 'wrote' faster than this many tokens/s is a server response-cache hit (the 48-call arm A calibration showed 42 such calls at >10,000 tok/s); excluded from speed, ttft and gap statistics, counted separately",
   "first_run_answer_tokens": 2048,
-  "_first_run_answer_tokens": "planner choice, 9 Oct 2026: max_tokens for a ticket when no calibration exists yet; the 'length' outcome doubles it once. After each run the calibration is recomputed from the run's own calls, so this only applies to a model's first run."
+  "_first_run_answer_tokens": "planner choice, 9 Oct 2026: max_tokens for a ticket when no calibration exists yet; the 'length' outcome doubles it once. After each run the calibration is recomputed from the run's own calls, so this only applies to a model's first run.",
+  "review_gate_threshold": 0.85,
+  "_review_gate_threshold": "planner choice, 21 Oct 2026: the worker model must rate a checklist statement at least this likely to be fine (from its YES/NO logprobs) to close it without the frontier reviewer. Flappy Bird typed-review experiment: 0.85 was the lowest value that missed none of 11 Opus-confirmed problems across 44 labelled statements; 0.8 missed one",
+  "review_gate_risk_open": 2.5,
+  "_review_gate_risk_open": "planner choice, 21 Oct 2026: a ticket whose checklist Score ('how likely is a bug the tests would not catch', levels 1-4) is at or above this opens every one of its statements for the frontier reviewer, even confident ones",
+  "review_answer_max_tokens": 4000,
+  "_review_answer_max_tokens": "planner choice, 21 Oct 2026: output cap for the typed frontier call (one JSON object per open statement; Flappy Bird used 1,809 for 8 statements)",
+  "review_models": {
+    "claude": {
+      "typed": "opus",
+      "full": "sonnet"
+    },
+    "openrouter": {
+      "typed": "anthropic/claude-opus-5.5",
+      "full": "anthropic/claude-sonnet-5.5"
+    }
+  },
+  "_review_models": "planner choice, 21 Oct 2026: default model per reviewer and mode. Typed answers are a small call (Flappy Bird: $0.06), so Opus; the full prose review reads the whole project, so Sonnet (v0.7.2). --model overrides either"
 }
