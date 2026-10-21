@@ -4,6 +4,9 @@
 // whole ticket. Writes <run>/typed-gate.json. Statements come from <project>/.is-worker/checklist.json (the planner
 // writes it with the tickets); without one, three generic statements per ticket are used and the output says so.
 //   node review/typed-gate.mjs --run runs/<id> [--tickets 3,5] [--dry]       (IS_WORKER_PROJECT set)
+//   --no-gate [--troubled 3,5]: no worker-model calls (the default review since 0.8.3): every cross statement is open,
+//   plus the per-ticket statements of the troubled tickets (retried, queued or failed). Per-ticket statements of clean
+//   tickets are skipped: their tests already pinned them, and across every measured run they never produced a finding.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -48,7 +51,7 @@ async function main() {
   const runDir = resolve(ROOT, String(args.run));
   if (!existsSync(resolve(runDir, "meta.json"))) { console.error(`no run at ${runDir} (no meta.json)`); process.exit(2); }
   const key = process.env.IS_WORKER_API_KEY || process.env.INDICSTACK_API_KEY;
-  if (!key) { console.error("IS_WORKER_API_KEY is not set (the orchestrator passes it)"); process.exit(2); }
+  if (!key && !args["no-gate"]) { console.error("IS_WORKER_API_KEY is not set (the orchestrator passes it)"); process.exit(2); }
   const cfg = armConfig("A");
   const brief = loadBrief();
   const work = WORK_ROOT || resolve(runDir, "work");
@@ -71,7 +74,16 @@ async function main() {
     return { top: j.choices?.[0]?.logprobs?.content?.[0]?.top_logprobs || [], seconds: (performance.now() - t0) / 1000, prompt_tokens: u.prompt_tokens || 0, completion_tokens: u.completion_tokens || 0, cost: Number.isFinite(u.cost) ? u.cost : null };
   }
 
-  const out = { run: runDir, checklist: checklist ? checklistPath : null, threshold: DEFAULTS.review_gate_threshold, risk_open: DEFAULTS.review_gate_risk_open, started: new Date().toISOString(), items: [], scores: [], usage: { calls: 0, prompt_tokens: 0, completion_tokens: 0, seconds: 0, cost: 0, cost_reported: 0 } };
+  const out = { run: runDir, checklist: checklist ? checklistPath : null, gate: !args["no-gate"], threshold: DEFAULTS.review_gate_threshold, risk_open: DEFAULTS.review_gate_risk_open, started: new Date().toISOString(), items: [], scores: [], usage: { calls: 0, prompt_tokens: 0, completion_tokens: 0, seconds: 0, cost: 0, cost_reported: 0 } };
+  if (args["no-gate"]) {
+    const troubled = new Set(args.troubled ? String(args.troubled).split(",").map(Number) : []);
+    out.items = statementsFor(tickets, checklist, ruleText).filter((q) => q.kind === "cross" || troubled.has(Number(q.ticket))).map((q) => ({ id: q.id, kind: q.kind, ticket: q.ticket, files: q.files, text: q.text, p_fine: null, open: true, opened_by: q.kind === "cross" ? "cross" : "troubled" }));
+    out.usage.wall_seconds = 0; out.open = out.items.length; out.closed = 0;
+    writeFileSync(resolve(runDir, "typed-gate.json"), JSON.stringify(out, null, 2));
+    updateMeta(runDir, { typedGate: { gate: false, checklist: Boolean(checklist), statements: out.items.length, open: out.open, closed: 0, usage: out.usage } });
+    console.log(`statements: ${out.items.length} (${out.items.filter((i) => i.kind === "cross").length} cross-file${troubled.size ? `, per-ticket for troubled ${[...troubled].join(", ")}` : ""}), no worker-model gate${checklist ? "" : " (no checklist.json: generic statements, weak at cross-file bugs)"}`);
+    return;
+  }
   const add = (r) => { out.usage.calls++; out.usage.prompt_tokens += r.prompt_tokens; out.usage.completion_tokens += r.completion_tokens; out.usage.seconds += r.seconds; if (r.cost != null) { out.usage.cost += r.cost; out.usage.cost_reported++; } };
   const t0 = performance.now();
   if (!args.dry) {
@@ -96,7 +108,7 @@ async function main() {
   out.open = out.items.filter((i) => i.open).length;
   out.closed = out.items.length - out.open;
   writeFileSync(resolve(runDir, "typed-gate.json"), JSON.stringify(out, null, 2));
-  updateMeta(runDir, { typedGate: { checklist: Boolean(checklist), statements: out.items.length, open: out.open, closed: out.closed, usage: out.usage } });
+  updateMeta(runDir, { typedGate: { gate: true, checklist: Boolean(checklist), statements: out.items.length, open: out.open, closed: out.closed, usage: out.usage } });
   for (const s of out.scores) console.log(`risk t${s.ticket}: ${s.risk}`);
   for (const i of out.items) console.log(`${String(i.ticket).padStart(2)} ${i.id.padEnd(20)} P(fine)=${i.p_fine == null ? " n/a " : i.p_fine.toFixed(3)} ${i.open ? "open" : "closed"}`);
   console.log(`gate: ${out.items.length} statements${checklist ? "" : " (no checklist.json: generic statements, weak at cross-file bugs)"}, ${out.closed} closed by ${cfg.model}, ${out.open} open; ${out.usage.calls} calls, ${out.usage.prompt_tokens} tokens, ${out.usage.wall_seconds}s`);

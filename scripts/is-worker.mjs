@@ -1,10 +1,12 @@
 // /is-worker orchestrator: IndicStack-only planner-worker-reviewer for any project.
 //   node scripts/is-worker.mjs <cmd> --project <dir> [...]
-//   cmds: init [--ide claude|cursor|codex|opencode|antigravity|all] | doctor | status | preflight | run | review [--reviewer claude|codex|opencode|custom|openrouter] [--model m] [--force] [--full] | table [--rate INR_PER_USD]
+//   cmds: init [--ide claude|cursor|codex|opencode|antigravity|all] | doctor | status | preflight | run | review [--reviewer claude|codex|opencode|custom|openrouter] [--model m] [--force] [--full] [--gate] | table [--rate INR_PER_USD]
 //   doctor exit codes: 0 ready, 3 key missing, 4 key rejected by IndicStack, 5 IndicStack unreachable, 6 selected reviewer CLI not found
 //   The reviewer is also picked by IS_WORKER_REVIEWER; "custom" runs the IS_WORKER_REVIEW_CMD template, "openrouter" calls the API (see lib/reviewer.mjs).
-//   review is typed by default (0.8.0): the worker model gates the planner's checklist, the reviewer answers only the open
-//   statements over the whole code in one call. --full is the pre-0.8.0 prose review of the diff.
+//   review is typed by default (0.8.0): the reviewer answers the planner's cross-file checklist statements (plus the
+//   per-ticket ones of troubled tickets) over the whole code in one call. --gate first has the worker model judge every
+//   statement and close the confident ones (0.8.0–0.8.2 default; 36 s of qwen for little gain). --full is the pre-0.8.0
+//   prose review of the diff.
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -165,12 +167,19 @@ async function review() {
     const { BRIEF_PATH, loadBrief } = await import("../lib/brief.mjs");
     if (!existsSync(BRIEF_PATH)) die(`review folder not built: no brief at ${BRIEF_PATH}`);
     try { loadBrief(); } catch (e) { die(`review folder not built: ${e.message}`); }
-    // 1. The worker model judges every checklist statement (P(fine) from its logprobs); confident ones close for ~₹0.10 each.
-    const key = await keyFor();
-    if (!key) die("no IndicStack key: the typed review's gate runs on the worker model. Save the key (doctor says how) or pass --full.");
-    say(`review (typed): gate on ${s.model}, then ${name}${model ? ` (model ${model})` : ""} on the open statements`);
-    const g = node("review/typed-gate.mjs", ["--run", run], { env: { IS_WORKER_API_KEY: key } });
-    if (g.status !== 0) die("typed gate failed (see above). Pass --full for the prose review.");
+    // 1. Pick the statements. Default: every cross-file statement plus the per-ticket statements of troubled tickets, no
+    //    worker-model calls. --gate: the worker model judges every statement first and closes the confident ones.
+    let g;
+    if (args.gate) {
+      const key = await keyFor();
+      if (!key) die("no IndicStack key: --gate runs on the worker model. Save the key (doctor says how), or drop --gate.");
+      say(`review (typed, gated): ${s.model} judges every statement, then ${name}${model ? ` (model ${model})` : ""} answers the open ones`);
+      g = node("review/typed-gate.mjs", ["--run", run], { env: { IS_WORKER_API_KEY: key } });
+    } else {
+      say(`review (typed): ${name}${model ? ` (model ${model})` : ""} answers the cross-file statements${s.tickets_troubled.length ? ` and ticket ${s.tickets_troubled.join(", ")}'s own` : ""} in one call`);
+      g = node("review/typed-gate.mjs", ["--run", run, "--no-gate", ...(s.tickets_troubled.length ? ["--troubled", s.tickets_troubled.join(",")] : [])]);
+    }
+    if (g.status !== 0) die("statement selection failed (see above). Pass --full for the prose review.");
     const gate = readJson(resolve(run, "typed-gate.json"));
     if (!gate.open) {
       const verdict = `PASS — 0 findings (${gate.closed} statements closed by ${s.model}, nothing open)`;
@@ -197,7 +206,7 @@ async function review() {
     });
     const lines = findings.map((f, n) => `${n + 1}. ${f.file}${f.line != null ? `:${f.line}` : ""} — ${f.why} (statement ${f.id})`);
     writeFileSync(resolve(meta.reviewFolder, "FINDINGS.md"), `# Findings\n\n${lines.join("\n") || "none"}\n${unanswered.length ? `\nUnanswered: ${unanswered.join(", ")}\n` : ""}`);
-    const verdict = `${findings.length ? "PASS WITH FINDINGS" : "PASS"} — ${findings.length} findings (${gate.closed} closed by ${s.model}, ${open.length} answered by ${name}${unanswered.length ? `, ${unanswered.length} unanswered` : ""})`;
+    const verdict = `${findings.length ? "PASS WITH FINDINGS" : "PASS"} — ${findings.length} findings (${gate.gate ? `${gate.closed} closed by ${s.model}, ` : ""}${open.length} answered by ${name}${unanswered.length ? `, ${unanswered.length} unanswered` : ""})`;
     record(r, { reviewVerdict: verdict, reviewerCorrections: findings.length, typedFindings: findings, typedUnanswered: unanswered });
     for (const l of lines) say("  " + l);
     say(`verdict: ${verdict}`);
@@ -255,7 +264,7 @@ async function table() {
   const row = `| ${m.id} (IndicStack ${m.model}) | ${fmt(s.prompt_tokens)} | ${fmt(s.completion_tokens)} | ₹${workerInr.toFixed(2)} | ${usageKnown ? fmt((ru.input || 0) + (ru.cache_write || 0) + (ru.cache_read || 0)) : "?"} | ${tok(ru.output)} | ${inr(reviewInr)} | ${s.tickets_passed_first_try}/${s.tickets_total} | ${s.tests_final ? `${s.tests_final.pass}/${s.tests_final.pass + s.tests_final.fail}` : "?"} | ${m.reviewerCorrections ?? "?"} | **₹${(workerInr + (reviewInr || 0)).toFixed(2)}** | ${mmss(wall + rs)} |`;
   const header = `| Run | Worker tokens in | Worker tokens out | Worker cost | ${who} review tokens in | ${who} review tokens out | ${who} review cost | First try | Final tests | Findings | Total cost | Total time |\n|---|---|---|---|---|---|---|---|---|---|---|---|`;
   let note = "";
-  if (m.reviewMode === "typed" && m.typedGate) note = `Typed review: ${m.typedGate.statements} statements${m.typedGate.checklist ? "" : " (generic: no checklist.json)"}, ${m.typedGate.closed} closed by ${m.model} (${fmt(gateTokens)} tokens, ₹${gateInr.toFixed(2)}, ${Math.round(g?.wall_seconds || 0)} s), ${m.typedGate.open} answered by ${who}${frontierInr != null ? ` (₹${frontierInr.toFixed(2)})` : ""}. ${m.reviewVerdict || ""}\n\n`;
+  if (m.reviewMode === "typed" && m.typedGate) note = `Typed review: ${m.typedGate.statements} statements${m.typedGate.checklist ? "" : " (generic: no checklist.json)"}, ${m.typedGate.gate ? `${m.typedGate.closed} closed by ${m.model} (${fmt(gateTokens)} tokens, ₹${gateInr.toFixed(2)}, ${Math.round(g?.wall_seconds || 0)} s), ` : "no worker-model gate, "}${m.typedGate.open} answered by ${who}${frontierInr != null ? ` (₹${frontierInr.toFixed(2)})` : ""}. ${m.reviewVerdict || ""}\n\n`;
   if (/^skipped/.test(m.reviewVerdict || "")) note += `Review was ${m.reviewVerdict}; the total is the worker cost only.`;
   else if (m.reviewer && !["claude", "openrouter"].includes(m.reviewer)) note += `${who} reports no tokens or cost; the review columns show ? and the total is the worker cost only.`;
   else if (Number.isFinite(rate) && m.reviewer !== "openrouter") {
