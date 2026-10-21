@@ -1,7 +1,7 @@
 {
   "name": "is-worker",
   "displayName": "IndicStack worker (/is-worker)",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Build features with Claude planning and reviewing while IndicStack's Qwen model writes every ticket; scripts check every answer. Command: /is-worker. Ends with a one-row rupee cost/time table.",
   "author": {
     "name": "IndicStack",

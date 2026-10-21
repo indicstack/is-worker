@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { ROOT, loadBrief } from "./lib/brief.mjs";
-import { loadTickets, buildMessages, buildBody, promptChars } from "./lib/prompt.mjs";
+import { loadTickets, buildMessages, buildBody, promptChars, ticketKey } from "./lib/prompt.mjs";
 import { chatStream, totalTimeoutMs, tokensEstimate } from "./lib/client.mjs";
 import { parseFiles } from "./lib/schema.mjs";
 import { createLimiter } from "./lib/limiter.mjs";
@@ -20,12 +20,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, process.env.IS_WORKER_TES
 const log = (p, msg) => { const line = `${new Date().toISOString()} ${msg}`; console.log(line); try { appendJsonl(p.log.replace(/\.log$/, ".events.jsonl"), { ts: new Date().toISOString(), msg }); } catch {} };
 
 export function budgetFor(ticket, cfg, cal) {
-  const perTicket = cal?.answer_tokens_p95_by_ticket?.[ticket.id];
-  if (Number.isFinite(perTicket)) return roundUpTo(perTicket * DEFAULTS.answer_budget_margin, 256);
-  if (Number.isFinite(cal?.answer_tokens_p95)) return roundUpTo(cal.answer_tokens_p95 * DEFAULTS.answer_budget_margin, 256);
+  // Never below first_run_answer_tokens: a tight budget costs a cut answer, a retry and a queued ticket (frontier tokens), far more than spare max_tokens.
+  const floor = DEFAULTS.first_run_answer_tokens;
+  const perTicket = cal?.answer_tokens_p95_by_ticket?.[ticketKey(ticket)];
+  if (Number.isFinite(perTicket)) return Math.max(floor, roundUpTo(perTicket * DEFAULTS.answer_budget_margin, 256));
+  if (Number.isFinite(cal?.answer_tokens_p95)) return Math.max(floor, roundUpTo(cal.answer_tokens_p95 * DEFAULTS.answer_budget_margin, 256));
   if (Number.isFinite(cfg.maxTokens)) return cfg.maxTokens;
   // no calibration yet: start from the brief-independent default and let the length/empty fixes double it if needed
-  return DEFAULTS.first_run_answer_tokens;
+  return floor;
 }
 
 export function timeoutsFor(maxTokens, cal) {
@@ -42,14 +44,14 @@ async function runTicket({ ticket, arm, cfg, cal, probe, p, apiKey, limiter, sta
   const used = new Set();
   let maxTokens = budgetFor(ticket, cfg, cal);
   const window = probe?.context_window || null;
-  let attempt = 0, lastHash = null, lastKind = null, tries5xx = 0, timeoutRetries = 0, checkRetries = 0;
+  let attempt = 0, lastHash = null, lastKind = null, tries5xx = 0, timeoutRetries = 0, checkRetries = 0, doublings = 0, temperature = 0;
   const charsPerToken = Number.isFinite(cal?.chars_per_token_p10) ? cal.chars_per_token_p10 : DEFAULTS.chars_per_token;
   const addFix = (name, text) => { if (used.has(name)) return false; used.add(name); fixes.push({ name, text }); return true; };
 
   while (attempt < DEFAULTS.max_attempts_per_ticket) {
     attempt++;
     const messages = buildMessages(ticket, p.work, fixes, state.runId);
-    const body = buildBody({ model: cfg.model, messages, maxTokens, thinking: cfg.thinking, extraBody: cfg.extraBody });
+    const body = buildBody({ model: cfg.model, messages, maxTokens, thinking: cfg.thinking, extraBody: cfg.extraBody, temperature });
     const est = tokensEstimate(promptChars(messages), charsPerToken);
     if (window && est + maxTokens + DEFAULTS.spare_tokens > window) {
       const room = window - est - DEFAULTS.spare_tokens;
@@ -99,7 +101,8 @@ async function runTicket({ ticket, arm, cfg, cal, probe, p, apiKey, limiter, sta
     if (r.kind === "length" || r.kind === "empty_content") {
       const doubled = window ? Math.min(maxTokens * 2, window - est - DEFAULTS.spare_tokens) : maxTokens * 2;
       const note = r.kind === "empty_content" ? "The previous answer was empty: the whole budget went to hidden reasoning. Answer with the JSON object only, no reasoning." : "The previous answer was cut off at the token limit. Keep the code compact; no comments or blank lines.";
-      if (doubled > maxTokens && addFix(`${r.kind}_double_budget`, note)) { maxTokens = doubled; continue; }
+      // double up to length_doublings times (2048 -> 4096 -> 8192 -> 16384) before giving the ticket to the planner
+      if (doubled > maxTokens && doublings < DEFAULTS.length_doublings && addFix(`${r.kind}_double_budget_${++doublings}`, note)) { maxTokens = doubled; continue; }
       enqueueForClaude(p.dir, ticket, `${r.kind} after budget ${maxTokens}`); recordTicket(p.dir, { ticket: ticket.id, status: "queued", attempts: attempt, error: r.kind }); return { status: "queued" };
     }
     if (r.kind === "runaway") {
@@ -113,7 +116,9 @@ async function runTicket({ ticket, arm, cfg, cal, probe, p, apiKey, limiter, sta
     const c = applyAndCheck({ runDir: p.dir, ticket, files: parsed.files, attempt, alsoTests: state.doneTests() });
     if (c.ok) { recordTicket(p.dir, { ticket: ticket.id, status: "ok", attempts: attempt, tests_pass: c.test.pass, tests_fail: 0 }); log(p, `t${ticket.id} OK (${c.test.pass} tests)`); return { status: "ok" }; }
     log(p, `t${ticket.id} check failed: ${c.error.split("\n")[0]}`);
-    if (checkRetries++ < 1 && addFix("check_failure", `Your previous files failed the check. Fix them. Error:\n${c.error.slice(0, 3000)}`)) continue;
+    // At temperature 0 a retry with the error appended returned byte-identical files (Paradox Atlas t2, 21 Oct 2026); retries sample instead.
+    temperature = DEFAULTS.retry_temperature;
+    if (checkRetries++ < DEFAULTS.check_retries && addFix(checkRetries === 1 ? "check_failure" : `check_failure_${checkRetries}`, `Your previous files failed the check below. Change the code so this exact failure goes away; keep everything the test does not complain about. Error:\n${c.error.slice(0, 3000)}`)) continue;
     enqueueForClaude(p.dir, ticket, c.error); recordTicket(p.dir, { ticket: ticket.id, status: "queued", attempts: attempt, error: "check_failed" }); return { status: "queued" };
   }
   enqueueForClaude(p.dir, ticket, `attempt cap ${DEFAULTS.max_attempts_per_ticket}`); recordTicket(p.dir, { ticket: ticket.id, status: "queued", attempts: attempt, error: "attempt_cap" }); return { status: "queued" };

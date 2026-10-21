@@ -25,13 +25,13 @@ async function runWorker(model, name, extra = {}) {
   return { r, runDir, tickets: readJsonl(resolve(runDir, "tickets.jsonl")), calls: readJsonl(resolve(runDir, "calls.jsonl")), queue: existsSync(resolve(runDir, "claude-queue.jsonl")) ? readJsonl(resolve(runDir, "claude-queue.jsonl")) : [], meta: JSON.parse(readFileSync(resolve(runDir, "meta.json"), "utf8")) };
 }
 
-test("ok answers that fail their tests get one retry with the error, then go to the queue", async () => {
+test("ok answers that fail their tests get two sampled retries with the error, then go to the queue", async () => {
   const { r, tickets, calls, queue, meta } = await runWorker("ok", "ok");
   assert.equal(r.status, 0, r.stderr);
   const latest = new Map(tickets.map((t) => [t.ticket, t]));
   assert.ok([...latest.values()].every((t) => t.status === "queued"), JSON.stringify(tickets));
-  // independent tickets 1-4 each: attempt 1 ok->check fail, attempt 2 with [fix check_failure], then queue; 5 and 6 blocked by deps
-  for (const id of [1, 2, 3, 4]) { const c = calls.filter((x) => x.ticket === id); assert.equal(c.length, 2, `ticket ${id} calls`); assert.deepEqual(c[1].fixes, ["check_failure"]); }
+  // independent tickets 1-4 each: attempt 1 ok->check fail, attempts 2 and 3 with the check_failure fixes (check_retries = 2), then queue; 5 and 6 blocked by deps
+  for (const id of [1, 2, 3, 4]) { const c = calls.filter((x) => x.ticket === id); assert.equal(c.length, 3, `ticket ${id} calls`); assert.deepEqual(c[1].fixes, ["check_failure"]); assert.deepEqual(c[2].fixes, ["check_failure", "check_failure_2"]); }
   assert.equal(queue.length, 6);
   assert.equal(meta.status, "needs_claude");
 });

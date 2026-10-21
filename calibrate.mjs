@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { loadBrief } from "./lib/brief.mjs";
 import { armConfig, calibrationPath, readProbe, DEFAULTS } from "./lib/settings.mjs";
-import { loadTickets, buildMessages, buildBody, promptChars } from "./lib/prompt.mjs";
+import { loadTickets, buildMessages, buildBody, promptChars, ticketKey } from "./lib/prompt.mjs";
 import { chatStream, tokensEstimate } from "./lib/client.mjs";
 import { parseFiles } from "./lib/schema.mjs";
 import { createLimiter } from "./lib/limiter.mjs";
@@ -60,7 +60,7 @@ function finish(status) {
   const speeds = ok.filter((r) => r.write_s > 0).map((r) => r.completion_tokens / r.write_s);
   const cpt = ok.filter((r) => r.prompt_chars).map((r) => r.prompt_chars / r.prompt_tokens);
   const byTicket = {};
-  for (const t of tickets) { const v = ok.filter((r) => r.ticket === t.id).map((r) => r.completion_tokens); if (v.length) byTicket[t.id] = percentile(v, 95); }
+  for (const t of tickets) { const v = ok.filter((r) => r.ticket === t.id).map((r) => r.completion_tokens); if (v.length) byTicket[ticketKey(t)] = percentile(v, 95); }
   const cal = {
     model: cfg.model, arm, baseUrl: cfg.baseUrl, at: new Date().toISOString(), run: run.id, source: args.source ? String(args.source) : "calibration run", n: rows.length, n_ok: ok.length, status,
     outcomes: rows.reduce((a, r) => { a[r.kind] = (a[r.kind] || 0) + 1; return a; }, {}),
