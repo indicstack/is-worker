@@ -241,48 +241,88 @@ async function review() {
 async function table() {
   const run = pickRun();
   const { summarize, readMeta } = await import("../lib/runs.mjs");
-  const s = summarize(run), m = readMeta(run);
-  const ru = m.reviewUsage || {};
-  const who = m.reviewer ? `${m.reviewer}${m.reviewerModel ? " " + m.reviewerModel : ""}` : "Opus"; // runs before 0.7.0 recorded no reviewer; they were all claude/Opus
-  const usageKnown = ru.input != null; // codex, opencode and custom reviewers report no tokens
-  let rate = Number(args.rate);
-  if (!Number.isFinite(rate) && ru.cost_usd != null) { try { const j = await (await fetch("https://api.frankfurter.app/latest?from=USD&to=INR")).json(); rate = j.rates.INR; say(`rate: ₹${rate}/USD (frankfurter, ${j.date})`); } catch { die("could not fetch USD→INR; pass --rate"); } }
-  const workerInr = s.cost ?? 0; // IndicStack reports cost in INR
-  // Typed review (0.8.0): the gate's worker-model calls are part of the review cost. IndicStack reports ₹ per call; when a
-  // call carries no cost, it is priced at this run's own ₹ per worker token.
-  const g = m.typedGate?.usage || null;
-  const gateTokens = g ? (g.prompt_tokens || 0) + (g.completion_tokens || 0) : 0;
-  const perToken = s.prompt_tokens + s.completion_tokens > 0 ? workerInr / (s.prompt_tokens + s.completion_tokens) : 0;
-  const gateInr = g ? (g.calls && g.cost_reported === g.calls ? g.cost : gateTokens * perToken) : 0;
-  const frontierInr = ru.cost_usd != null ? ru.cost_usd * rate : null;
-  const reviewInr = m.reviewMode === "typed" ? (frontierInr ?? 0) + gateInr : frontierInr;
-  const wall = s.wall_s || 0, rs = (ru.seconds || 0) + (g?.wall_seconds || 0);
-  const fmt = (n) => Number(n).toLocaleString("en-IN");
-  const tok = (v) => (v == null ? "?" : fmt(v));
-  const inr = (v) => (v == null ? "?" : `₹${v.toFixed(2)}`);
-  const mmss = (sec) => `${Math.floor(sec / 60)} min ${Math.round(sec % 60)} s`;
-  const row = `| ${m.id} (IndicStack ${m.model}) | ${fmt(s.prompt_tokens)} | ${fmt(s.completion_tokens)} | ₹${workerInr.toFixed(2)} | ${usageKnown ? fmt((ru.input || 0) + (ru.cache_write || 0) + (ru.cache_read || 0)) : "?"} | ${tok(ru.output)} | ${inr(reviewInr)} | ${s.tickets_passed_first_try}/${s.tickets_total} | ${s.tests_final ? `${s.tests_final.pass}/${s.tests_final.pass + s.tests_final.fail}` : "?"} | ${m.reviewerCorrections ?? "?"} | **₹${(workerInr + (reviewInr || 0)).toFixed(2)}** | ${mmss(wall + rs)} |`;
-  const header = `| Run | Worker tokens in | Worker tokens out | Worker cost | ${who} review tokens in | ${who} review tokens out | ${who} review cost | First try | Final tests | Findings | Total cost | Total time |\n|---|---|---|---|---|---|---|---|---|---|---|---|`;
-  let note = "";
-  if (m.reviewMode === "typed" && m.typedGate) note = `Typed review: ${m.typedGate.statements} statements${m.typedGate.checklist ? "" : " (generic: no checklist.json)"}, ${m.typedGate.gate ? `${m.typedGate.closed} closed by ${m.model} (${fmt(gateTokens)} tokens, ₹${gateInr.toFixed(2)}, ${Math.round(g?.wall_seconds || 0)} s), ` : "no worker-model gate, "}${m.typedGate.open} answered by ${who}${frontierInr != null ? ` (₹${frontierInr.toFixed(2)})` : ""}. ${m.reviewVerdict || ""}\n\n`;
-  if (/^skipped/.test(m.reviewVerdict || "")) note += `Review was ${m.reviewVerdict}; the total is the worker cost only.`;
-  else if (m.reviewer && !["claude", "openrouter"].includes(m.reviewer)) note += `${who} reports no tokens or cost; the review columns show ? and the total is the worker cost only.`;
-  else if (Number.isFinite(rate) && m.reviewer !== "openrouter") {
-    try {
-      const j = await (await fetch("https://openrouter.ai/api/v1/models")).json();
-      const id = String(args["opus-id"] || "anthropic/claude-opus-5.5");
-      const o = j.data.find((x) => x.id === id);
-      if (o) {
-        const pm = (v) => Math.round(Number(v) * 1e8) / 100;
-        const px = { in: pm(o.pricing.prompt), out: pm(o.pricing.completion), cr: pm(o.pricing.input_cache_read ?? 0), cw: pm(o.pricing.input_cache_write ?? 0) };
-        const usd = ((ru.input || 0) * px.in + (ru.cache_read || 0) * px.cr + (ru.cache_write || 0) * px.cw + (ru.output || 0) * px.out) / 1e6;
-        note += `Opus list price (${id}, OpenRouter, ${new Date().toISOString().slice(0, 10)}): $${px.in}/M in, $${px.out}/M out, $${px.cr}/M cache read, $${px.cw}/M cache write. Review at these prices: ₹${(usd * rate).toFixed(2)}; Claude reported ₹${frontierInr.toFixed(2)}.`;
-      }
-    } catch { note += "(Opus list price lookup failed; review cost is Claude's reported figure)"; }
+  const T = await import("../lib/tokens.mjs");
+  const m = readMeta(run), s = summarize(run);
+  // The milestone = every run built from the same frozen brief (a resume or a re-run after a queue counts too).
+  const runs = m.briefHash ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => { const x = readMeta(d); return x && x.briefHash === m.briefHash && x.mode === m.mode; }) : [run];
+  const metas = runs.map((d) => readMeta(d)).filter(Boolean);
+  const firstStart = metas.map((x) => x.started).filter(Boolean).sort()[0];
+  const ends = metas.flatMap((x) => [x.finished, x.reviewedAt]).filter(Boolean).sort();
+  const lastEnd = ends.length ? new Date(ends.at(-1)).getTime() + 15 * 60 * 1000 : Date.now();
+  const until = args.until ? new Date(String(args.until)).toISOString() : new Date(Math.min(Date.now(), lastEnd)).toISOString();
+  const worker = T.workerUsage(runs);
+  const planner = T.plannerUsage({ project, firstRunStart: firstStart, until });
+  const orKey = process.env.OPENROUTER_API_KEY || (await import("../lib/keys.mjs")).keyFor("C") || null;
+  let outMethod = null;
+  if (planner) { const c = await T.countOutput({ text: planner.outputText, model: planner.models[0], key: orKey }); planner.usage.output = Math.max(c.tokens, planner.loggedOutput); outMethod = c.method; }
+  // Reviewer calls are recorded on the run that was reviewed (claude and openrouter report tokens; codex/opencode/custom do not).
+  const rev = { calls: 0, input: 0, cache_write: 0, cache_read: 0, output: 0 };
+  let revKnown = true, revRan = false;
+  for (const x of metas) {
+    const ru = x.reviewUsage;
+    if (!ru) continue;
+    revRan = true;
+    if (ru.input == null) { revKnown = false; continue; }
+    if ((ru.input || 0) + (ru.output || 0) + (ru.cache_read || 0) === 0) continue; // the reviewer crashed before any call
+    rev.calls++; rev.input += ru.input || 0; rev.cache_write += ru.cache_write || 0; rev.cache_read += ru.cache_read || 0; rev.output += ru.output || 0;
   }
-  note = note.trim();
-  say(header + "\n" + row + (note ? "\n\n" + note : ""));
-  writeFileSync(resolve(run, "TABLE.md"), header + "\n" + row + "\n" + (note ? "\n" + note + "\n" : ""));
+  const frontier = planner ? T.add(planner.usage, rev) : null;
+  const fModel = planner?.models?.[0] || m.reviewerModel || "frontier";
+  const code = T.codeBytes(project);
+  const app = String(args.app || project.split(/[\\/]/).pop());
+  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, model: planner?.models?.[0] || null, bytes: code.bytes });
+  const fmt = (n) => (n == null ? "?" : Number(n).toLocaleString("en-IN"));
+  const col = (u, k) => (u ? fmt(k === "total" ? T.totalOf(u) : k === "new" ? u.input + u.cache_write : u[k]) : "?");
+  const W = worker, F = frontier, A = alone?.usage;
+  const rows = [
+    ["Model", `IndicStack ${m.model}`, fModel, alone ? alone.basis[0].model : "?"],
+    ["Calls", col(W, "calls"), col(F, "calls"), col(A, "calls")],
+    ["New input tokens", col(W, "new"), col(F, "new"), col(A, "new")],
+    ["Cache-read tokens (context re-read each turn)", "0", col(F, "cache_read"), col(A, "cache_read")],
+    ["Output tokens", col(W, "output"), col(F, "output"), col(A, "output")],
+    ["**Total tokens**", `**${col(W, "total")}**`, `**${col(F, "total")}**`, `**${col(A, "total")}**`],
+  ];
+  if (F && A) {
+    const pct = (x, y) => (y ? `${Math.round((1 - x / y) * 100)}%` : "?");
+    rows.push(["Frontier tokens saved vs alone", "—", `${fmt(T.totalOf(A) - T.totalOf(F))} (${pct(T.totalOf(F), T.totalOf(A))})`, "—"]);
+    rows.push(["Frontier output tokens saved vs alone", "—", `${fmt(A.output - F.output)} (${pct(F.output, A.output)})`, "—"]);
+  }
+  const aloneHead = alone ? `Frontier alone (${alone.kind})` : "Frontier alone (no baseline yet)";
+  const tbl = `| | Worker | Frontier with is-worker | ${aloneHead} |\n|---|---|---|---|\n` + rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
+  const notes = [];
+  const tests = s.tests_final ? `${s.tests_final.pass}/${s.tests_final.pass + s.tests_final.fail}` : "?";
+  notes.push(`Milestone: ${runs.length} run(s) from brief ${String(m.briefHash).slice(0, 8)} (${runs.map((d) => d.split(/[\\/]/).pop()).join(", ")}); ${s.tickets_passed_first_try}/${s.tickets_total} first try, final tests ${tests}. App: ${(code.bytes / 1024).toFixed(1)} KB in ${code.files} files.`);
+  notes.push(`Worker: summed from ${W.calls} API calls' usage (calls.jsonl).`);
+  const revNote = revRan ? (revKnown ? `${rev.calls} review call(s)` : "a review whose tool reports no tokens (not counted)") : "no review";
+  notes.push(planner
+    ? `Frontier with is-worker: the planner's Claude Code session, usage block of every API call from ${planner.since.slice(0, 19)}Z to ${until.slice(0, 19)}Z (${planner.files.length} transcript file(s), subagents included), plus ${revNote}. Output = visible reply text counted with ${outMethod}; hidden thinking is not in the transcript and is not counted.`
+    : "Frontier with is-worker: no planner transcript found (non-Claude IDE, or no /is-worker command before the first run); shown as ?.");
+  if (alone?.kind === "measured") notes.push(`Frontier alone: measured — ${alone.basis[0].source}.`);
+  else if (alone) notes.push(`Frontier alone: estimated as tokens per KB of finished code × this app's ${(code.bytes / 1024).toFixed(1)} KB, pooled over ${alone.basis.length} measured build(s): ${alone.basis.map((b) => `${b.app} ${fmt(Math.round(T.totalOf(b.usage) / (b.code_bytes / 1024)))} tok/KB`).join(", ")}. Range from those builds: ${fmt(alone.range[0])}–${fmt(alone.range[1])} tokens.`);
+  else notes.push("Frontier alone: no measured baseline for this model yet. Record one with `is-worker.mjs baseline`.");
+  const out = tbl + "\n\n" + notes.join("\n");
+  say(out);
+  writeFileSync(resolve(run, "TABLE.md"), out + "\n");
+}
+
+// Records a measured frontier-alone build: the app folder it wrote and the transcript(s) of the session that wrote it.
+//   baseline --app <name> --dir <app folder> --transcript <file.jsonl>[,<file2>] [--since ISO] [--until ISO] [--source text]
+async function baseline() {
+  const T = await import("../lib/tokens.mjs");
+  if (!args.app || !args.dir || !args.transcript) die("usage: is-worker.mjs baseline --app <name> --dir <app folder> --transcript <file.jsonl>[,more] [--since ISO] [--until ISO] [--source text]");
+  const files = String(args.transcript).split(",").map((f) => resolve(f));
+  const r = T.transcriptUsage({ files, since: args.since ? String(args.since) : null, until: args.until ? String(args.until) : null });
+  if (!r.usage.calls) die("no assistant usage found in those transcripts/window");
+  const orKey = process.env.OPENROUTER_API_KEY || (await import("../lib/keys.mjs")).keyFor("C") || null;
+  const c = await T.countOutput({ text: r.outputText, model: r.models[0], key: orKey });
+  r.usage.output = Math.max(c.tokens, r.loggedOutput);
+  const code = T.codeBytes(resolve(String(args.dir)));
+  const f = resolve(HOME, "alone-baselines.json");
+  const j = readJson(f) || { about: "Measured frontier-alone builds (no harness), read by `table` for the Frontier alone column.", baselines: [] };
+  j.baselines = j.baselines.filter((b) => b.app !== String(args.app) || b.model !== r.models[0]);
+  j.baselines.push({ app: String(args.app), model: r.models[0], date: new Date().toISOString().slice(0, 10), code_bytes: code.bytes, code_files: code.files, usage: r.usage, output_method: c.method, source: String(args.source || `${r.files.length} transcript file(s)`) });
+  writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+  say(`baseline ${args.app} (${r.models[0]}): ${code.files} files, ${(code.bytes / 1024).toFixed(1)} KB, ${r.usage.calls} calls, ${T.totalOf(r.usage).toLocaleString("en-IN")} tokens (output ${r.usage.output.toLocaleString("en-IN")})`);
 }
 
 // Writes the planner instructions (AGENTS.md with the harness path filled in) where each agentic IDE reads them.
@@ -295,6 +335,6 @@ async function init() {
   if (r.written.length) say(`Next: open ${r.project} in your IDE and type: use is-worker to build <your idea>`);
 }
 
-const cmds = { init, doctor, status, preflight, run, review, table };
-if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
+const cmds = { init, doctor, status, preflight, run, review, table, baseline };
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));

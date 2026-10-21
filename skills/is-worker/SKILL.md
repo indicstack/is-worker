@@ -1,6 +1,6 @@
 ---
 name: is-worker
-description: Build a feature or app with the planner-worker-reviewer pattern on IndicStack. Use when the user types /is-worker  followed by an idea or attaches a PRD. Claude plans (brief, tickets, tests) and reviews; IndicStack's qwen model writes every ticket; scripts check every answer. Ends with a one-row cost/time table in rupees and a link to try the result.
+description: Build a feature or app with the planner-worker-reviewer pattern on IndicStack. Use when the user types /is-worker  followed by an idea or attaches a PRD. Claude plans (brief, tickets, tests) and reviews; IndicStack's qwen model writes every ticket; scripts check every answer. Ends with a token table (IndicStack worker, frontier model with is-worker, frontier model alone) and a link to try the result.
 ---
 
 # /is-worker — planner-worker-reviewer on IndicStack
