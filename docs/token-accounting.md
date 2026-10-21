@@ -5,8 +5,11 @@
 | Column | What it is | Where the numbers come from |
 |---|---|---|
 | Worker | the IndicStack model (qwen) writing tickets | the `usage` block of every worker API call, `runs/*/calls.jsonl`, summed over every run of the milestone (same frozen brief) |
-| Frontier with is-worker | Claude (or whichever model plans) while using is-worker, plus the reviewer | the planner's Claude Code transcript, from the `/is-worker` command to the table, subagents included, plus the review call's reported usage |
+| Frontier with is-worker | Claude (or whichever model plans) while using is-worker, plus the reviewer | ONLY the Claude Code session that is running `table` (found by its latest tool call), from its last `/is-worker` command to now, subagents included, plus the review call's reported usage. Run from any other chat it shows `?`. (0.8.5 swept every transcript that mentioned the project folder and counted other chats as planning — Flappy Bird showed 678 calls over nine days; removed in 0.8.6.) |
 | Frontier alone | the same model building the same request with no harness | a measured build in `alone-baselines.json` (recorded with `is-worker.mjs baseline`); if this app has none, an estimate (below) |
+
+## The cost row
+Tokens are not alike. At list price a cache-read token is about 5% of a new-input token and an output token is 5× one. The table weighs each column at the frontier model's OpenRouter list price (the worker's is what IndicStack billed), and the "saved vs alone" line is in cost, shown only when the alone build was measured, never estimated. Token totals are still printed, but a total that is 95% cache reads is not a 7× cost.
 
 ## Rows
 - **New input tokens**: input + cache writes. Text the model reads for the first time.

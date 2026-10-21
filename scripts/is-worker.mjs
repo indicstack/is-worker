@@ -158,7 +158,7 @@ async function review() {
   let name; try { name = selectedReviewer(args.reviewer); } catch (e) { die(e.message); }
   const s = summarize(run);
   const mode = args.full ? "full" : "typed";
-  const model = args.model ? String(args.model) : DEFAULTS.review_models?.[name]?.[mode] ?? null; // CLIs without an entry use their own default
+  let model = args.model ? String(args.model) : DEFAULTS.review_models?.[name]?.[mode] ?? null; // CLIs without an entry use their own default
   const unavailable = () => say("review unavailable: the tests already checked every ticket. Do NOT review by hand or with a subagent, and do not start a new brief or milestone from your own reading; show the table and stop.");
   const record = (r, extra) => { const u = r.usage; updateMeta(run, { reviewer: name, reviewerModel: model, reviewMode: mode, reviewUsage: { input: u?.input ?? null, cache_write: u?.cache_write ?? null, cache_read: u?.cache_read ?? null, output: u?.output ?? null, cost_usd: u?.cost_usd ?? null, seconds: r.seconds, model: u?.model || model }, ...extra }); };
 
@@ -191,7 +191,14 @@ async function review() {
     if (mk.status !== 0) die(`review folder not built: ${firstError(mk.stderr || mk.stdout)}`);
     const meta = readJson(resolve(run, "meta.json"));
     say(`review folder: ${meta.reviewFolder}`);
-    const r = await runReview({ name, folder: meta.reviewFolder, model, mode, maxTokens: DEFAULTS.review_answer_max_tokens });
+    let r = await runReview({ name, folder: meta.reviewFolder, model, mode, maxTokens: DEFAULTS.review_answer_max_tokens });
+    // The claude CLI can be blocked for an account ("disabled Claude subscription access", expired OAuth). With an
+    // OpenRouter key saved, fall back to it instead of leaving no review (paradox runs on 21 Oct 2026 ended with none).
+    if (name === "claude" && !r.skipped && /disabled Claude subscription access|Failed to authenticate|OAuth/.test(r.stdout + r.stderr) && (await import("../lib/reviewer.mjs")).reviewers.openrouter.bin(process.env)) {
+      say("claude CLI is blocked for this account; falling back to --reviewer openrouter");
+      name = "openrouter"; model = args.model ? String(args.model) : DEFAULTS.review_models.openrouter[mode];
+      r = await runReview({ name, folder: meta.reviewFolder, model, mode, maxTokens: DEFAULTS.review_answer_max_tokens });
+    }
     if (r.skipped) { say(`review skipped: ${r.reason}. Install it, or choose another with --reviewer claude|codex|opencode|custom|openrouter (or IS_WORKER_REVIEWER).`); updateMeta(run, { reviewer: name, reviewerModel: model, reviewMode: mode, reviewVerdict: r.verdict }); return; }
     if (r.status !== 0) say(`${name} exited ${r.status}${r.error ? ` (${r.error})` : ""}: ${(r.stderr || r.stdout).trim().split("\n").slice(-3).join(" | ").slice(0, 300)}`);
     const ansPath = resolve(meta.reviewFolder, "ANSWERS.json");
@@ -251,7 +258,9 @@ async function table() {
   const lastEnd = ends.length ? new Date(ends.at(-1)).getTime() + 15 * 60 * 1000 : Date.now();
   const until = args.until ? new Date(String(args.until)).toISOString() : new Date(Math.min(Date.now(), lastEnd)).toISOString();
   const worker = T.workerUsage(runs);
-  const planner = T.plannerUsage({ project, firstRunStart: firstStart, until });
+  const found = T.plannerUsage({ project, firstRunStart: firstStart, until });
+  const planner = found && !found.none ? found : null;
+  const px = await T.listPrices(planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5");
   const orKey = process.env.OPENROUTER_API_KEY || (await import("../lib/keys.mjs")).keyFor("C") || null;
   let outMethod = null;
   if (planner) { const c = await T.countOutput({ text: planner.outputText, model: planner.models[0], key: orKey }); planner.usage.output = Math.max(c.tokens, planner.loggedOutput); outMethod = c.method; }
@@ -270,7 +279,7 @@ async function table() {
   const fModel = planner?.models?.[0] || m.reviewerModel || "frontier";
   const code = T.codeBytes(project);
   const app = String(args.app || project.split(/[\\/]/).pop());
-  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, model: planner?.models?.[0] || null, bytes: code.bytes });
+  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, model: planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5", bytes: code.bytes });
   const fmt = (n) => (n == null ? "?" : Number(n).toLocaleString("en-IN"));
   const col = (u, k) => (u ? fmt(k === "total" ? T.totalOf(u) : k === "new" ? u.input + u.cache_write : u[k]) : "?");
   const W = worker, F = frontier, A = alone?.usage;
@@ -282,10 +291,13 @@ async function table() {
     ["Output tokens", col(W, "output"), col(F, "output"), col(A, "output")],
     ["**Total tokens**", `**${col(W, "total")}**`, `**${col(F, "total")}**`, `**${col(A, "total")}**`],
   ];
-  if (F && A) {
-    const pct = (x, y) => (y ? `${Math.round((1 - x / y) * 100)}%` : "?");
-    rows.push(["Frontier tokens saved vs alone", "—", `${fmt(T.totalOf(A) - T.totalOf(F))} (${pct(T.totalOf(F), T.totalOf(A))})`, "—"]);
-    rows.push(["Frontier output tokens saved vs alone", "—", `${fmt(A.output - F.output)} (${pct(F.output, A.output)})`, "—"]);
+  // Tokens are not alike: a cache read costs a few percent of a new input token, an output token several times one.
+  // The cost row weighs them at list price so the columns can be compared; the worker's is what IndicStack billed.
+  const usd = (u) => (u && px ? `$${T.usdAt(u, px).toFixed(3)}` : "?");
+  rows.push(["Cost at list price", s.cost != null ? `₹${s.cost.toFixed(2)} (IndicStack)` : "?", usd(F), usd(A)]);
+  if (F && A && alone.kind === "measured" && px) {
+    const d = T.usdAt(A, px) - T.usdAt(F, px);
+    rows.push(["Frontier cost saved vs alone", "—", `${d >= 0 ? "" : "-"}$${Math.abs(d).toFixed(3)} (${Math.round((1 - T.usdAt(F, px) / T.usdAt(A, px)) * 100)}%)`, "—"]);
   }
   const aloneHead = alone ? `Frontier alone (${alone.kind})` : "Frontier alone (no baseline yet)";
   const tbl = `| | Worker | Frontier with is-worker | ${aloneHead} |\n|---|---|---|---|\n` + rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
@@ -295,8 +307,9 @@ async function table() {
   notes.push(`Worker: summed from ${W.calls} API calls' usage (calls.jsonl).`);
   const revNote = revRan ? (revKnown ? `${rev.calls} review call(s)` : "a review whose tool reports no tokens (not counted)") : "no review";
   notes.push(planner
-    ? `Frontier with is-worker: the planner's Claude Code session, usage block of every API call from ${planner.since.slice(0, 19)}Z to ${until.slice(0, 19)}Z (${planner.files.length} transcript file(s), subagents included), plus ${revNote}. Output = visible reply text counted with ${outMethod}; hidden thinking is not in the transcript and is not counted.`
-    : "Frontier with is-worker: no planner transcript found (non-Claude IDE, or no /is-worker command before the first run); shown as ?.");
+    ? `Frontier with is-worker: this Claude Code session only (${planner.session.split(/[\\/]/).pop().slice(0, 8)}…, ${planner.files.length} transcript file(s) incl. its subagents), usage block of every API call from ${planner.since.slice(0, 19)}Z to ${until.slice(0, 19)}Z, plus ${revNote}. Output = visible reply text counted with ${outMethod}; hidden thinking is not counted on either side.`
+    : `Frontier with is-worker: ${found?.none || "the running session's transcript was not found (non-Claude IDE)"}; shown as ?. Run \`table\` from the chat that ran /is-worker to count its planning.`);
+  if (px) notes.push(`List prices (${px.id}, OpenRouter): $${px.in}/M new input, $${px.cr}/M cache read, $${px.out}/M output. A cache-read token costs ${Math.round(100 * px.cr / px.in)}% of a new-input token; that is why the cost row, not the token total, is the comparison.`);
   if (alone?.kind === "measured") notes.push(`Frontier alone: measured — ${alone.basis[0].source}.`);
   else if (alone) notes.push(`Frontier alone: estimated as tokens per KB of finished code × this app's ${(code.bytes / 1024).toFixed(1)} KB, pooled over ${alone.basis.length} measured build(s): ${alone.basis.map((b) => `${b.app} ${fmt(Math.round(T.totalOf(b.usage) / (b.code_bytes / 1024)))} tok/KB`).join(", ")}. Range from those builds: ${fmt(alone.range[0])}–${fmt(alone.range[1])} tokens.`);
   else notes.push("Frontier alone: no measured baseline for this model yet. Record one with `is-worker.mjs baseline`.");
