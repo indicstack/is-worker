@@ -54,5 +54,9 @@
       "full": "anthropic/claude-sonnet-5.5"
     }
   },
-  "_review_models": "planner choice, 21 Oct 2026: default model per reviewer and mode. Typed answers are a small call (Flappy Bird: $0.06), so Opus; the full prose review reads the whole project, so Sonnet (v0.7.2). --model overrides either"
+  "_review_models": "planner choice, 21 Oct 2026: default model per reviewer and mode. Typed answers are a small call (Flappy Bird: $0.06), so Opus; the full prose review reads the whole project, so Sonnet (v0.7.2). --model overrides either",
+  "auto_go_inr": 50,
+  "_auto_go_inr": "planner choice, 21 Oct 2026: a run whose estimated worker cost is at or under this many rupees starts without waiting for 'go', so a small build feels like a direct one (Paradox Atlas: 4 tickets ≈ ₹1; the whole Flappy Bird run was ₹1.37). Above it the planner states the estimate and waits.",
+  "first_run_cost_inr": 10,
+  "_first_run_cost_inr": "planner choice, 21 Oct 2026: the estimate the planner quotes before any calibration exists (every measured run so far was under ₹2 of worker cost per 6 tickets)"
 }
