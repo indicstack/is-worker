@@ -80,6 +80,10 @@ Cursor, Codex CLI, OpenCode, Antigravity. The Claude Code plugin is one packagin
 
 The blind review is a second, headless session in an isolated folder. It defaults to `claude` with Opus for the typed call (Sonnet for `--full`; `--model` overrides). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`, and `--reviewer openrouter` posts the folder to OpenRouter with no CLI at all. Only the claude and openrouter reviewers report tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
 
+## What's new in 0.8.3 — review without the gate
+
+The typed review no longer asks the worker model first. One frontier call answers the planner's cross-file statements (and the per-ticket statements of troubled tickets); clean tickets' own statements are skipped because their tests pinned them and, across every measured run, they never produced a finding. Saves ~36 s and ₹3 per review on Flappy Bird. `--gate` restores the worker-model pass.
+
 ## What's new in 0.8.2 — parallel lanes
 
 Tickets whose dependencies are done now run side by side: the API arms default to concurrency 4 (`arms.default.json`), because IndicStack batches concurrent requests (4 ticket-sized calls finished in 7.5 s against 5.5 s for one), and the AIMD limiter halves the lane count on any 429/503. A ticket that rewrites an earlier ticket's file gets that ticket's test in its prompt (keep-green). Flappy Bird, live run 21 Oct 2026: write phase 58 s (was 89 s), whole run with typed review ₹11.36 and 2 min 2 s (12 Oct: ₹51 and 3 min 52 s).
