@@ -147,7 +147,7 @@ async function run() {
   // self-calibration: recompute speed, chars/token and answer budgets from this run's own calls
   const rc = node("calibrate.mjs", ["--arm", "A", "--recompute", lastRun(), "--source", `run ${meta.id}`], { env: { IS_WORKER_API_KEY: key }, quiet: true });
   say(rc.status === 0 ? "calibration updated from this run" : `calibration not updated: ${(rc.stderr || rc.stdout).slice(0, 200)}`);
-  if (meta.status === "needs_claude") say(`tickets queued for the planner: see ${resolve(lastRun(), "claude-queue.jsonl")}. Submit each with: node ${resolve(HOME, "check.mjs")} --run <run> --ticket N --files <json> (IS_WORKER_PROJECT set).`);
+  if (meta.status === "needs_claude") say(`tickets queued for the planner: see ${resolve(lastRun(), "claude-queue.jsonl")}. If a test was wrong, fix the test, then resume (re-runs only the queued tickets): node ${resolve(HOME, "scripts", "is-worker.mjs")} run --project ${project} --resume ${lastRun()}. Write code yourself only for a ticket the worker still fails after resume: node ${resolve(HOME, "check.mjs")} --run ${lastRun()} --ticket N --files '[{"path":"…","content":"…"}]' (IS_WORKER_PROJECT set).`);
 }
 
 async function review() {

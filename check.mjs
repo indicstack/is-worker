@@ -96,7 +96,10 @@ function cli() {
   if (!ticket) { console.error(`no ticket ${args.ticket}`); process.exit(2); }
   const prev = latestByKey(runPaths(runDir).tickets, (r) => r.ticket).get(ticket.id);
   const attempt = (prev?.attempts || 0) + 1;
-  const { files } = JSON.parse(readFileSync(resolve(args.files), "utf8"));
+  const raw = /^\s*[[{]/.test(args.files) ? args.files : readFileSync(resolve(args.files), "utf8");
+  const parsed = JSON.parse(raw);
+  const files = Array.isArray(parsed) ? parsed : parsed.files;
+  if (!Array.isArray(files)) { console.error('--files must be [{"path","content"}] or {"files":[…]} (inline JSON or a file path)'); process.exit(2); }
   const meta = readMeta(runDir) || {};
   const r = applyAndCheck({ runDir, ticket, files, attempt });
   appendJsonl(runPaths(runDir).calls, {

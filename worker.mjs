@@ -154,6 +154,8 @@ async function main() {
   const limiter = createLimiter({ start: cfg.concurrency || 1, max: cfg.concurrency || 1, cleanMultiplier: DEFAULTS.aimd_clean_multiplier });
   const state = { consecutive429: 0, runId: run.id, doneTests: () => tickets.filter((t) => status.get(t.id) === "ok").map((t) => t.test) };
   const status = new Map([...latestByKey(p.tickets, (r) => r.ticket)].map(([k, v]) => [k, v.status]));
+  // resume: queued tickets (planner fixed their test, or a dependency now passes) go back to the worker; ok tickets stay done
+  if (existing) for (const [k, s] of status) if (s === "queued") status.delete(k);
   let breaker = false;
   const running = new Map();
   const ready = () => tickets.filter((t) => !status.has(t.id) || status.get(t.id) === "failed").filter((t) => !running.has(t.id)).filter((t) => t.deps.every((d) => status.get(d) === "ok"));
