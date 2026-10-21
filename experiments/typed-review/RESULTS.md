@@ -51,6 +51,25 @@ Reference: the 12 Oct review through the Claude Code CLI (tool loop, cache write
 
 qwen is a ranker, not a calibrated judge: a 0.3 is "fine" 7 times in 10. 0.85 is the lowest threshold that missed nothing here. Only escalated items have labels, so this is a floor, not a full calibration. WorkflowEvals' 700 cases were not run: they are invoice/support/security tasks, not code review, so they would calibrate a different question.
 
+## Option F — split the writing by the dependency graph (21 Oct, later run)
+
+Rule: the ticket with the most deps (the critical-path tail, ticket 6) is written by Opus; qwen writes the rest. No qwen gate: Opus answers the whole planner checklist (23 statements) in one typed call over the full diff. Budget: Opus tokens under 3/5 of Opus-alone (22,532).
+
+| | **C. Opus alone** | **E. typed, wired in** | **F. split write + typed review** |
+|---|---|---|---|
+| qwen | — | 6 tickets ₹1.37 (89 s) + gate ₹3.25 (40 s) | 5 tickets, 22,376 tokens, ₹0.95, 50 s (t1 needed a retry) |
+| Opus writes | 37,553 tokens | — | ticket 6: 10,698 tokens, $0.093, 27 s |
+| Opus reviews | — | 9,443 tokens, $0.063, 17 s | 11,774 tokens, $0.099, 31 s |
+| **Opus tokens** | 37,553 | 9,443 | **22,472 (60%)** |
+| **Total cost** | ₹24.42 | ₹10.24 | **₹19.1** |
+| **Total time** | 63 s | 146 s | **108 s** |
+| Tests | 31/31 | 31/31 | 31/31 |
+| Findings | none looked | 5 | 5 (4 of the known 5; best-write not flagged in Opus's own main.mjs; new: rng closure impurity) |
+
+F is 26% faster than E for the same findings, at the token cap. It is not 63 s: with IndicStack serving one request per key, the chain is qwen 50 s → Opus t6 27 s → review 31 s. Overlapping the review of tickets 1–5 with Opus writing t6 would cut ~20 s but costs ~3,700 more Opus tokens (70% of Opus-alone), over the cap. The remaining time lever is the same as before: per-key parallelism on IndicStack, which would let tickets 1–4 run at once (qwen 50 s → ~15 s, F → ~75 s).
+
+Script: option-f.mjs. Raw: flappy-bird/.is-worker/option-F.json.
+
 ## Files
 - typed-review.mjs — A. typed-review-v2.mjs — D and E. checklist-planner.json — E's questions. opus.mjs — OpenRouter helper. full-review.mjs — B. opus-worker.mjs — C.
 - Raw results in flappy-bird/.is-worker/: typed-review.json (A), typed-review-D.json, typed-review-E.json, full-review-B.json, opus-worker-C.json. B's REVIEW.md: ~/eval-isolated/review-2026-10-21-6.
