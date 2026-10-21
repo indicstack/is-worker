@@ -70,6 +70,37 @@ F is 26% faster than E for the same findings, at the token cap. It is not 63 s: 
 
 Script: option-f.mjs. Raw: flappy-bird/.is-worker/option-F.json.
 
+## Option G — contract-first, two lanes, commit in order (21 Oct, evening)
+
+Correction first: IndicStack is NOT one request per key. A probe with ticket-sized prompts (3.5k in, 184 out): 1 call 5.5 s, 4 concurrent calls 7.5 s each — near 4× throughput. The earlier gate was slow because 30 prompts of 2.5k tokens are prefill-bound, not because of a cap. Everything below uses qwen concurrency 4.
+
+**Design (option-g.mjs; the rules generalise from tickets.jsonl + brief + calibration):**
+1. Contract-first: the frozen brief pins every interface, so every ticket starts at t=0. A dependency orders the commit and the test of a ticket, not its writing; 'reads' that do not exist yet are absent from the prompt.
+2. Two lanes: qwen (4 at once) and Opus (parallel, expensive). Knapsack rule: longest expected qwen time first (calibration tokens ÷ 50 tok/s × expected attempts) into the Opus lane while Opus tokens ÷ all tokens ≤ cap. With the cap at 0.4 on this six-ticket project it picks nothing; `--frontier 6` forces the tail ticket.
+3. Commit in order: files land in the work dir only after every dep has committed, so when two tickets write one file the later one in dependency order wins, whichever finished first.
+4. Keep-green: a ticket that rewrites an earlier ticket's file gets that ticket's test in its prompt and in its own test run (static from tickets.jsonl, no regression pass needed to discover it).
+5. Ladder: a failed ticket retries on the cheap lane if it has a free slot, then goes to Opus; an Opus ticket falls back to qwen. Final regression blames the last writer of the failing test's files and uses the same ladder.
+6. Review: the 6 cross-file statements only (+ per-ticket statements of escalated tickets), one Opus call, no gate.
+
+| | **C. Opus alone** | **F** | **G-cheap (all qwen)** | **G (Opus writes the tail)** |
+|---|---|---|---|---|
+| qwen tokens | 0 | 22,376 | 32,456 (t6 twice) | 17,443 |
+| Opus tokens | 37,553 | 22,472 | 22,681 (t6 fix + review) | 19,242 (t6 + review) |
+| Opus share of all tokens | 100% | 50% | 41% | 52% |
+| Opus vs Opus-alone | 100% | 60% | 60% | 51% |
+| Cost | ₹24.42 | ₹19.1 | ₹16.4 | ₹14.9 |
+| **Wall** | 63 s | 108 s | 98 s | **42.5 s** |
+| Tests | 31/31 | 31/31 | 31/31 | 31/31 first try |
+| Findings | — | 5 | 5 | 5 |
+
+**What decided it.** Ticket 6 fails the "no numeric literal in main.mjs" rule on qwen every time (12 Oct, F, G-cheap twice): the brief gives no constants for text layout, so qwen invents numbers; Opus derives them (`BIRD_H * 2`). Every qwen attempt on t6 is 23 s of wasted bottleneck time. The knapsack must use expected attempts from calibration, not just length: with attempts = 2, t6's expected qwen time (50 s) is double Opus's (27 s) and the rule picks it on time. The real fix is upstream: a test that demands what the contract does not provide is a planner defect; the brief should carry the text-layout constants.
+
+**The 3/5 : 2/5 share.** Opus's load in G is fixed per milestone: one tail ticket (~10.7k) and one review (~8.6k) ≈ 19k, whatever the project size. qwen's load grows with the leaf tickets (~3.5k each). Projection at the measured sizes: 6 tickets → 52% Opus (this run); 10 tickets → ~37%; 15 tickets (KareSathi M1 size) → ~27%; 25 tickets → ~18%. Flappy Bird is the worst case for the ratio because it is tiny. On any real milestone G meets 3/5 : 2/5 with room, at ~45 s plus about 3 s per extra leaf ticket (4 lanes).
+
+**Timeline of the 42.5 s run:** t1–t4 on qwen from 0 s (done 9–16 s), t5 at 9 s (done 16 s), Opus t6 from 0 s with t1's test in its prompt (done 30.5 s, 11/11), regression 31/31 at 31 s, review 11 s. Critical path = Opus writing t6. The next cut is splitting t6 into two tickets (machine.mjs, main.mjs) so two Opus calls run side by side: ~16 s write, ~30 s wall — a planner change, not a harness change.
+
+Script: option-g.mjs. Raw: flappy-bird/.is-worker/option-G.json (all-qwen), option-G6.json (Opus tail).
+
 ## Files
 - typed-review.mjs — A. typed-review-v2.mjs — D and E. checklist-planner.json — E's questions. opus.mjs — OpenRouter helper. full-review.mjs — B. opus-worker.mjs — C.
 - Raw results in flappy-bird/.is-worker/: typed-review.json (A), typed-review-D.json, typed-review-E.json, full-review-B.json, opus-worker-C.json. B's REVIEW.md: ~/eval-isolated/review-2026-10-21-6.
