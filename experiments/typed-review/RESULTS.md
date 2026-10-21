@@ -99,7 +99,13 @@ Correction first: IndicStack is NOT one request per key. A probe with ticket-siz
 
 **Timeline of the 42.5 s run:** t1–t4 on qwen from 0 s (done 9–16 s), t5 at 9 s (done 16 s), Opus t6 from 0 s with t1's test in its prompt (done 30.5 s, 11/11), regression 31/31 at 31 s, review 11 s. Critical path = Opus writing t6. The next cut is splitting t6 into two tickets (machine.mjs, main.mjs) so two Opus calls run side by side: ~16 s write, ~30 s wall — a planner change, not a harness change.
 
-Script: option-g.mjs. Raw: flappy-bird/.is-worker/option-G.json (all-qwen), option-G6.json (Opus tail).
+Script: option-g.mjs. Raw: flappy-bird/.is-worker/option-G6.json (Opus tail, before the fixes).
+### G after the critic's fixes (21 Oct, late)
+
+Fixes: (1) a ticket starts at t=0 only when every 'reads' file is contract-covered (exists already, or its module is in the brief's Interfaces section); otherwise it waits for its deps; (2) each ticket's tests run in a snapshot of harness-owned files + its deps' and co-writers' committed files + its own, never a half-committed sibling; the full tree runs once at the end; (3) the knapsack reads calibration state (tokens per ticket, speed, ttft) and last run's attempts, does not stop at a rejected ticket, and takes a known-bad qwen ticket (≥ 2 attempts last run) even past the share cap; the review shards into parallel calls past 10k prompt tokens and treats an unparsable answer as an error.
+
+Run with no flags (the rule chose Opus for t6 by itself: "qwen needed 2 attempts last run"): **46.2 s wall**, 31/31 first try, 4 findings (reseed not present in this Opus-written machine.mjs), qwen 17,443 tokens ₹0.74, Opus 19,581 tokens $0.158 (52% of Opus-alone), Opus share 53%. Time is unchanged within Opus's own variance (t6 31.8 s vs 30.5 s before the fixes; review 13.5 s vs 11.2 s). Raw: flappy-bird/.is-worker/option-G.json.
+
 
 ## Files
 - typed-review.mjs — A. typed-review-v2.mjs — D and E. checklist-planner.json — E's questions. opus.mjs — OpenRouter helper. full-review.mjs — B. opus-worker.mjs — C.
