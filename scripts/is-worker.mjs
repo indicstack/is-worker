@@ -245,6 +245,15 @@ async function review() {
   say(`verdict: ${verdict || "(no REVIEW.md written)"}`);
 }
 
+// expand (0.9.0): the frontier model writes one example + a test template + a target list (.is-worker/expand.json); qwen
+// writes every target, four at a time, tested per target. No brief, no tickets, no planning turns.
+async function expand() {
+  const key = await keyFor();
+  if (!key) die("no IndicStack key (doctor says how to save it)");
+  const r = node("scripts/expand.mjs", ["--spec", String(args.spec || resolve(pwr, "expand.json"))], { env: { IS_WORKER_API_KEY: key } });
+  if (r.status === 2) die("expand failed");
+}
+
 async function table() {
   const run = pickRun();
   const { summarize, readMeta } = await import("../lib/runs.mjs");
@@ -258,7 +267,7 @@ async function table() {
   const lastEnd = ends.length ? new Date(ends.at(-1)).getTime() + 15 * 60 * 1000 : Date.now();
   const until = args.until ? new Date(String(args.until)).toISOString() : new Date(Math.min(Date.now(), lastEnd)).toISOString();
   const worker = T.workerUsage(runs);
-  const found = T.plannerUsage({ project, firstRunStart: firstStart, until });
+  const found = T.plannerUsage({ project, firstRunStart: firstStart, until, kind: m.kind || "run" });
   const planner = found && !found.none ? found : null;
   const px = await T.listPrices(planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5");
   const orKey = process.env.OPENROUTER_API_KEY || (await import("../lib/keys.mjs")).keyFor("C") || null;
@@ -348,6 +357,6 @@ async function init() {
   if (r.written.length) say(`Next: open ${r.project} in your IDE and type: use is-worker to build <your idea>`);
 }
 
-const cmds = { init, doctor, status, preflight, run, review, table, baseline };
-if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
+const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand };
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));
