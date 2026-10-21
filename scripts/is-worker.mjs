@@ -244,10 +244,12 @@ async function table() {
   const T = await import("../lib/tokens.mjs");
   const m = readMeta(run), s = summarize(run);
   // The milestone = every run built from the same frozen brief (a resume or a re-run after a queue counts too).
-  const runs = listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => readMeta(d)?.briefHash === m.briefHash);
-  const metas = runs.map((d) => readMeta(d));
+  const runs = m.briefHash ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => { const x = readMeta(d); return x && x.briefHash === m.briefHash && x.mode === m.mode; }) : [run];
+  const metas = runs.map((d) => readMeta(d)).filter(Boolean);
   const firstStart = metas.map((x) => x.started).filter(Boolean).sort()[0];
-  const until = args.until ? new Date(String(args.until)).toISOString() : new Date().toISOString();
+  const ends = metas.flatMap((x) => [x.finished, x.reviewedAt]).filter(Boolean).sort();
+  const lastEnd = ends.length ? new Date(ends.at(-1)).getTime() + 15 * 60 * 1000 : Date.now();
+  const until = args.until ? new Date(String(args.until)).toISOString() : new Date(Math.min(Date.now(), lastEnd)).toISOString();
   const worker = T.workerUsage(runs);
   const planner = T.plannerUsage({ project, firstRunStart: firstStart, until });
   const orKey = process.env.OPENROUTER_API_KEY || (await import("../lib/keys.mjs")).keyFor("C") || null;
@@ -268,7 +270,7 @@ async function table() {
   const fModel = planner?.models?.[0] || m.reviewerModel || "frontier";
   const code = T.codeBytes(project);
   const app = String(args.app || project.split(/[\\/]/).pop());
-  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, model: planner?.models?.[0], bytes: code.bytes });
+  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, model: planner?.models?.[0] || null, bytes: code.bytes });
   const fmt = (n) => (n == null ? "?" : Number(n).toLocaleString("en-IN"));
   const col = (u, k) => (u ? fmt(k === "total" ? T.totalOf(u) : k === "new" ? u.input + u.cache_write : u[k]) : "?");
   const W = worker, F = frontier, A = alone?.usage;
