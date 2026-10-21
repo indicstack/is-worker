@@ -1,6 +1,40 @@
 {
-  "_source": "PROMPT-SETUP.md 'Arms' (9 Oct 2026). Prices and concurrency are blank until the owner enters them in the UI; Probe fills the OpenRouter model id and prices from its /models listing.",
-  "A": { "label": "A: IndicStack", "baseUrl": "https://api.indicstack.ai/v1", "model": "qwen38-27b", "thinking": false, "concurrency": 1, "maxTokens": null, "priceInPerM": null, "priceOutPerM": null, "calibrationCalls": 48, "mode": "api" },
-  "B": { "label": "B: Opus 5.5 alone", "baseUrl": "", "model": "Opus 5.5 (Claude Code session, no worker call)", "thinking": null, "concurrency": 1, "maxTokens": null, "priceInPerM": null, "priceOutPerM": null, "calibrationCalls": 0, "mode": "claude" },
-  "C": { "label": "C: OpenRouter", "baseUrl": "https://openrouter.ai/api/v1", "model": "", "modelHint": "Qwen 3.8 27B (probe /models to find its id)", "thinking": false, "concurrency": 1, "maxTokens": null, "priceInPerM": null, "priceOutPerM": null, "calibrationCalls": 48, "mode": "api" }
+  "_source": "PROMPT-SETUP.md 'Arms' (9 Oct 2026). Prices and concurrency are blank until the owner enters them in the UI; Probe fills the OpenRouter model id and prices from its /models listing. Concurrency 4 for the API arms since 22 Oct 2026: IndicStack batches concurrent requests (4 ticket-sized calls 7.5 s against 5.5 s for one; 8 gate calls no 429s), and the AIMD limiter halves it on any 429/503. Tickets whose deps are done run side by side; Flappy Bird's write phase fell from 89 s to ~35 s.",
+  "A": {
+    "label": "A: IndicStack",
+    "baseUrl": "https://api.indicstack.ai/v1",
+    "model": "qwen38-27b",
+    "thinking": false,
+    "concurrency": 4,
+    "maxTokens": null,
+    "priceInPerM": null,
+    "priceOutPerM": null,
+    "calibrationCalls": 48,
+    "mode": "api"
+  },
+  "B": {
+    "label": "B: Opus 5.5 alone",
+    "baseUrl": "",
+    "model": "Opus 5.5 (Claude Code session, no worker call)",
+    "thinking": null,
+    "concurrency": 1,
+    "maxTokens": null,
+    "priceInPerM": null,
+    "priceOutPerM": null,
+    "calibrationCalls": 0,
+    "mode": "claude"
+  },
+  "C": {
+    "label": "C: OpenRouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "model": "",
+    "modelHint": "Qwen 3.8 27B (probe /models to find its id)",
+    "thinking": false,
+    "concurrency": 4,
+    "maxTokens": null,
+    "priceInPerM": null,
+    "priceOutPerM": null,
+    "calibrationCalls": 48,
+    "mode": "api"
+  }
 }
