@@ -1,0 +1,21 @@
+{
+  "about": "Measured frontier-alone builds (no harness), read by `table` for the Frontier alone column.",
+  "baselines": [
+    {
+      "app": "paradoxes",
+      "model": "claude-opus-5-5",
+      "date": "2026-10-21",
+      "code_bytes": 15975,
+      "code_files": 5,
+      "usage": {
+        "calls": 3,
+        "input": 6,
+        "cache_write": 50761,
+        "cache_read": 85139,
+        "output": 8152
+      },
+      "output_method": "anthropic/claude-opus-5.5 tokenizer via OpenRouter",
+      "source": "Opus 5.5 subagent in Claude Code built the same prompt with no harness, 21 Oct 2026 (42 paradoxes, 7 domains, SVG visual per paradox; node --check + data import check)"
+    }
+  ]
+}
