@@ -372,6 +372,15 @@ async function init() {
   if (r.written.length) say(`Next: open ${r.project} in your IDE and type: use is-worker to build <your idea>`);
 }
 
-const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand };
-if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
+// N7: qwen digests of long files, cached by content hash, so the planner reads DIGESTS.md instead of the files.
+async function digest() {
+  const key = await keyFor();
+  if (!key) die("no IndicStack key (doctor says how to save it)");
+  const pass = ["files", "dir", "min"].flatMap((k) => (args[k] ? [`--${k}`, String(args[k])] : []));
+  const r = node("scripts/digest.mjs", pass, { env: { IS_WORKER_API_KEY: key } });
+  if (r.status) die("digest failed");
+}
+
+const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand, digest };
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand|digest --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));
