@@ -421,11 +421,18 @@ async function build() {
   const { verify } = await import("../lib/verify.mjs");
   const spec = String(args.spec || resolve(pwr, "expand.json"));
   let expandStatus = null;
-  if (!args["verify-only"] && existsSync(spec)) {
+  const { findStubs } = await import("./stubs.mjs");
+  const stubCount = findStubs(resolve(project, String(args.dir || "src"))).length;
+  if (!args["verify-only"] && (stubCount || existsSync(spec))) {
     const key = await keyFor();
-    if (!key) die("no IndicStack key (doctor says how to save it); without it, write the targets yourself and run build --verify-only");
-    expandStatus = node("scripts/expand.mjs", ["--spec", spec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
-    if (expandStatus === 2) die("build stopped: the spec is invalid or a self-test failed (see above). Fix it and run build again.");
+    if (!key) die(`IS-WORKER: NOT CONNECTED — no IndicStack key. Save it with: node "${resolve(HOME, "scripts/key.mjs")}" (in a terminal), or fill the ${stubCount} @qwen stub(s) yourself and run build --verify-only`);
+    // Stub route first (0.10.1B): qwen fills every file marked // @qwen, tested against its own stub.
+    if (stubCount) { const st = node("scripts/stubs.mjs", ["--dir", String(args.dir || "src"), ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status; if (st === 1) expandStatus = 1; if (st === 2) die("build stopped: stub filling could not start (see above)"); }
+    if (existsSync(spec)) {
+      const es = node("scripts/expand.mjs", ["--spec", spec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+      if (es === 2) die("build stopped: the spec is invalid or a self-test failed (see above). Fix it and run build again.");
+      if (es === 1) expandStatus = 1;
+    }
   }
   const v = verify(project, String(args.dir || "src"));
   say(`verify: ${v.files} module(s); syntax errors ${v.syntax.length}; imported ${v.imported}${v.browserOnly.length ? `; browser-only ${v.browserOnly.length} (${v.browserOnly.map((x) => x.file).join(", ")})` : ""}; failed ${v.failed.length}`);
@@ -435,7 +442,7 @@ async function build() {
     const kb = codeBytes(project).bytes / 1024, want = Number(args["target-kb"]);
     say(kb < 0.8 * want ? `size: ${kb.toFixed(1)} KB of the ${want} KB asked (${Math.round((100 * kb) / want)}%) — under 80%: add targets to expand.json, not hand-written files, then run build again` : `size: ${kb.toFixed(1)} KB of the ${want} KB asked`);
   }
-  if (expandStatus === 1) say("expand left target(s) above: fix the closest candidate on disk, then run build --verify-only --commit \"…\"");
+  if (expandStatus === 1) say("the worker left file(s) above: fix the closest candidate on disk, then run build --verify-only --commit \"…\"");
   if (!v.ok || expandStatus === 1) process.exit(1);
   if (args.commit) {
     const g = (a) => spawnSync("git", a, { cwd: project, encoding: "utf8" });

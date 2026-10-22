@@ -28,7 +28,7 @@ for (const ide of Object.keys(expectFiles)) {
       assert.equal(count(t, START), 1, `${f} start marker`); assert.equal(count(t, END), 1, `${f} end marker`);
       assert.ok(t.includes(HOME), `${f} has the absolute harness path`);
       assert.ok(!t.includes("IS_WORKER_HOME"), `${f} placeholder replaced`);
-      assert.ok(t.includes("## Step 0 — connect"), `${f} carries the steps`);
+      assert.ok(t.includes("## The one call"), `${f} carries the steps`);
       assert.match(r.stdout, new RegExp(`wrote .*${f.replace(/[.]/g, "\\.")}`));
     }
   });
@@ -77,7 +77,7 @@ test("SKILL.md (Claude Code) and AGENTS.md (other IDEs) agree on every step", ()
   const body = (t) => { const i = t.indexOf("\nGround rules (from"); assert.ok(i > 0, "shared body starts at the Ground rules line"); return t.slice(i + 1); };
   const skill = body(read(resolve(HOME, "skills/is-worker/SKILL.md"))).replaceAll("${CLAUDE_PLUGIN_ROOT}", "IS_WORKER_HOME");
   const agents = body(read(resolve(HOME, "AGENTS.md")));
-  assert.ok(skill.length > 2000); assert.equal(skill, agents);
-  for (const step of ["Step 0", "Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Step 6", "Step 7"]) assert.ok(agents.includes(`## ${step}`), step);
-  for (const rule of ["never write an identifier", "do not write ticket code yourself", "Keep the API key out of chat", "Never overwrite a run"]) assert.ok(agents.includes(rule), rule);
+  assert.ok(skill.length > 1000); assert.equal(skill, agents);
+  for (const h of ["## The one call", "## Then"]) assert.ok(agents.includes(h), h);
+  for (const rule of ["two turns", "@qwen", "Keep the API key out of chat", "tickets-route.md"]) assert.ok(agents.includes(rule), rule);
 });

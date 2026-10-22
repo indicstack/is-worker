@@ -1,7 +1,7 @@
 {
   "name": "is-worker",
   "displayName": "IndicStack worker",
-  "version": "0.10.1",
+  "version": "0.10.1-b",
   "description": "Builds apps and features cheaply: Claude writes the novel core, IndicStack's Qwen writes every family of sibling files from one example, scripts test every file. Runs automatically for builds of ~15 KB+ (or /is-worker). Ends with a token table against a measured frontier-alone build. Includes a built-in token economizer (from microsoft/TokenEconomizer, Apache-2.0; needs Python 3.10+) that stays off until a repository has 5 sessions of history, learning from transcripts meanwhile.",
   "author": {
     "name": "IndicStack",
