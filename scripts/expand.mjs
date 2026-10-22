@@ -51,7 +51,10 @@ const p0 = run ? runPaths(run.dir) : null;
 const tmpDir = run ? run.dir : resolve(IS_WORKER_DIR, "self-test");
 const specHash = createHash("sha256").update(readFileSync(specPath)).digest("hex");
 if (run) writeMeta(run.dir, { id: run.id, arm: "A", mode: cfg.mode, kind: "expand", model: cfg.model, baseUrl: cfg.baseUrl, concurrency: cfg.concurrency, briefHash: specHash, spec: specPath, started: new Date().toISOString(), status: "running", ticketsTotal: total, patterns: patterns.map((p) => ({ name: p.name, targets: p.targets.length })), defaults: { samples: 3, retries: 1 } });
-const log = (m) => { console.log(`${new Date().toISOString()} ${m}`); if (p0) appendJsonl(p0.log.replace(/\.log$/, ".events.jsonl"), { ts: new Date().toISOString(), msg: m }); };
+// L1: the chat re-reads every printed line on every later turn, so print a summary; the full log is in events.jsonl.
+const verbose = Boolean(args.verbose);
+const log = (m, always = false) => { if (verbose || always) console.log(m); if (p0) appendJsonl(p0.log.replace(/\.log$/, ".events.jsonl"), { ts: new Date().toISOString(), msg: m }); };
+const firstError = (out) => (String(out).match(/(AssertionError[^\n]*|Error[^\n]*|missing [^\n]*|SyntaxError[^\n]*)/) || [String(out).trim().split("\n")[0] || ""])[0].slice(0, 200);
 const jsonl = (k, row) => { if (p0) appendJsonl(p0[k], { ts: new Date().toISOString(), ...row }); };
 
 const render = (tpl, t) => String(tpl).replace(/\{\{path\}\}/g, t.path).replace(/\{\{params\.([A-Za-z0-9_]+)\}\}/g, (_, k) => String(t.params?.[k] ?? ""));
@@ -106,14 +109,14 @@ for (const p of patterns) {
   try { st = test(p, p.example); } catch (e) { st = { pass: 0, fail: 1, out: e.message }; }
   if (st.fail || !st.pass) {
     blocked += p.targets.length;
-    console.log(`\nself-test FAILED for ${p.name}: its test does not pass on the example, so no target was sent. Fix the test or the example and rerun.\n${String(st.out).slice(0, 3000)}`);
+    console.log(`self-test FAILED for ${p.name} (no target sent): ${firstError(st.out)}${verbose ? `\n${String(st.out).slice(0, 3000)}` : " (--verbose for the full output)"}`);
     for (const t of p.targets) jsonl("tickets", { ticket: t.path, path: t.path, status: "queued", attempts: 0, error: "self_test_failed" });
     continue;
   }
   log(`${p.name}: self-test passed on the example (${st.pass} pass)`);
   ready.push(p);
 }
-if (selfTestOnly) { console.log(`\nself-test: ${ready.length}/${patterns.length} pattern(s) ready.`); process.exit(ready.length === patterns.length ? 0 : 2); }
+if (selfTestOnly) { console.log(`self-test: ${ready.length}/${patterns.length} pattern(s) ready.`); process.exit(ready.length === patterns.length ? 0 : 2); }
 
 const limiter = createLimiter({ start: cfg.concurrency || 1, max: cfg.concurrency || 1, cleanMultiplier: DEFAULTS.aimd_clean_multiplier });
 let ok = 0, firstTry = 0, id = 0;
@@ -170,6 +173,7 @@ await Promise.all(ready.map(async (p) => {
         }
       }
       log(`t${tid} ${t.path} retry ${round}: 0 of ${samples} candidates passed${best ? ` (best ${best.pass} pass ${best.fail} fail)` : ""}`);
+      if (round === retries) log(`left: ${t.path} — ${best ? firstError(best.out) : err}`, true);
       if (best) err = `the test failed:\n${String(best.out).slice(0, 2500)}`;
     }
     if (best) writeFileSync(dest, best.content); // closest candidate stays for the frontier to fix
@@ -177,5 +181,5 @@ await Promise.all(ready.map(async (p) => {
   }));
 }));
 updateMeta(run.dir, { status: left.length || blocked ? "needs_claude" : "done", finished: new Date().toISOString(), testsFinal: { pass: ok, fail: total - ok }, firstTry, selfTestBlocked: blocked });
-console.log(`\nexpand: ${ok}/${total} targets written and tested by ${cfg.model} (${firstTry} first try)${blocked ? `; ${blocked} not sent because a self-test failed` : ""}; ${left.length ? `left for you (closest candidate on disk): ${left.join(", ")}` : "nothing left"}. Run ${run.id}.`);
+console.log(`expand: ${ok}/${total} targets written and tested by ${cfg.model} (${firstTry} first try)${blocked ? `; ${blocked} not sent because a self-test failed` : ""}; ${left.length ? `left for you (closest candidate on disk): ${left.join(", ")}` : "nothing left"}. Run ${run.id}.`);
 if (left.length || blocked) process.exit(1);

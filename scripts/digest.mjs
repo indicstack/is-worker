@@ -4,6 +4,8 @@
 // Digests are cached by content hash in .is-worker/digests/, so an unchanged file never costs a second call.
 // Writes .is-worker/DIGESTS.md: the planner reads that instead of the files.
 //   IS_WORKER_PROJECT=<dir> IS_WORKER_API_KEY=… node scripts/digest.mjs [--files a.mjs,b.mjs | --dir src] [--min 3000]
+// L2 (after context-mode's intent search): `--query "budget alerts" [--top 3]` prints only the best-matching digests, from
+// the cache, with no model call and no key, so the planner reads what a ticket needs instead of all of DIGESTS.md.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
 import { resolve, relative, join } from "node:path";
 import { createHash } from "node:crypto";
@@ -14,9 +16,30 @@ import { exportsDigest } from "../lib/digest.mjs";
 import { createLimiter } from "../lib/limiter.mjs";
 
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
+const project = WORK_ROOT || process.cwd();
+const cacheDir = resolve(IS_WORKER_DIR, "digests");
+const indexFile = resolve(cacheDir, "index.json");
+const section = (d) => [`## ${d.rel} (${(d.bytes / 1024).toFixed(1)} KB)`, d.purpose, ...d.exports.map((x) => `- \`${x.signature}\` — ${x.does}`),
+  ...(d.invariants.length ? [`Invariants: ${d.invariants.join("; ")}`] : []), ...(d.gotchas.length ? [`Gotchas: ${d.gotchas.join("; ")}`] : []), ""].join("\n");
+
+// Rank cached digests by query words: path and export names weigh most, then purpose, then the rest.
+export function rank(digests, query) {
+  const words = String(query).toLowerCase().split(/[^a-z0-9_]+/).filter((w) => w.length > 1);
+  const hits = (text, w) => (String(text).toLowerCase().match(new RegExp(w, "g")) || []).length;
+  return digests.map((d) => ({ d, score: words.reduce((a, w) => a + 4 * hits(d.rel, w) + 3 * hits(d.exports.map((x) => x.name).join(" "), w) + 2 * hits(d.purpose, w) + hits(JSON.stringify([d.exports, d.invariants, d.gotchas]), w), 0) }))
+    .filter((x) => x.score > 0).sort((a, b) => b.score - a.score).map((x) => x.d);
+}
+
+if (args.query) {
+  const index = existsSync(indexFile) ? JSON.parse(readFileSync(indexFile, "utf8")) : {};
+  const all = Object.entries(index).filter(([, h]) => existsSync(resolve(cacheDir, `${h.hash}.json`))).map(([rel, h]) => ({ rel, bytes: h.bytes, ...JSON.parse(readFileSync(resolve(cacheDir, `${h.hash}.json`), "utf8")) }));
+  if (!all.length) { console.error("no digests yet: run `is-worker digest` once first"); process.exit(2); }
+  const top = rank(all, args.query).slice(0, Number(args.top || 3));
+  console.log(top.length ? top.map(section).join("\n") : `no digest matches "${args.query}" (${all.length} files digested: ${all.map((d) => d.rel).join(", ")})`);
+  process.exit(0);
+}
 const key = process.env.IS_WORKER_API_KEY || process.env.INDICSTACK_API_KEY;
 if (!key) { console.error("IS_WORKER_API_KEY missing"); process.exit(2); }
-const project = WORK_ROOT || process.cwd();
 const cfg = armConfig("A");
 const min = Number(args.min ?? 3000);
 const CODE = /\.(m?js|ts|tsx|jsx|css|html|py)$/;
@@ -30,7 +53,6 @@ function walk(d, out = []) {
 }
 const files = (args.files ? String(args.files).split(",").map((f) => resolve(project, f.trim())) : walk(resolve(project, String(args.dir || "src"))))
   .filter((f) => existsSync(f) && statSync(f).size >= min);
-const cacheDir = resolve(IS_WORKER_DIR, "digests");
 mkdirSync(cacheDir, { recursive: true });
 
 const SCHEMA = { name: "digest", strict: true, schema: { type: "object", additionalProperties: false, required: ["purpose", "exports", "invariants", "gotchas"], properties: {
@@ -52,7 +74,7 @@ const results = await Promise.all(files.map(async (f) => {
   const rel = relative(project, f), src = readFileSync(f, "utf8");
   const hash = createHash("sha256").update(cfg.model + "\n" + src).digest("hex").slice(0, 16);
   const cf = resolve(cacheDir, `${hash}.json`);
-  if (existsSync(cf)) { cached++; return { rel, bytes: src.length, ...JSON.parse(readFileSync(cf, "utf8")) }; }
+  if (existsSync(cf)) { cached++; return { rel, hash, bytes: src.length, ...JSON.parse(readFileSync(cf, "utf8")) }; }
   const facts = exportsDigest(rel, src);
   await limiter.acquire();
   try {
@@ -60,18 +82,14 @@ const results = await Promise.all(files.map(async (f) => {
     limiter.release("clean");
     fresh++; inTok += r.usage.prompt_tokens; outTok += r.usage.completion_tokens;
     writeFileSync(cf, JSON.stringify(r.value, null, 1));
-    return { rel, bytes: src.length, ...r.value };
+    return { rel, hash, bytes: src.length, ...r.value };
   } catch (e) { limiter.release("other"); console.error(`${rel}: ${e.message}`); return { rel, bytes: src.length, purpose: "(digest failed: read the file)", exports: [], invariants: [], gotchas: [] }; }
 }));
 results.sort((a, b) => a.rel.localeCompare(b.rel));
-const md = ["# Digests (written by qwen from the code; read these instead of the files)", ""];
-for (const d of results) {
-  md.push(`## ${d.rel} (${(d.bytes / 1024).toFixed(1)} KB)`, d.purpose);
-  for (const x of d.exports) md.push(`- \`${x.signature}\` — ${x.does}`);
-  if (d.invariants.length) md.push(`Invariants: ${d.invariants.join("; ")}`);
-  if (d.gotchas.length) md.push(`Gotchas: ${d.gotchas.join("; ")}`);
-  md.push("");
-}
+const index = existsSync(indexFile) ? JSON.parse(readFileSync(indexFile, "utf8")) : {};
+for (const d of results) if (d.hash) index[d.rel] = { hash: d.hash, bytes: d.bytes };
+writeFileSync(indexFile, JSON.stringify(index, null, 1));
+const md = ["# Digests (written by qwen from the code; read these instead of the files)", "", ...results.map(section)];
 const out = resolve(IS_WORKER_DIR, "DIGESTS.md");
 writeFileSync(out, md.join("\n"));
 const srcBytes = results.reduce((a, d) => a + d.bytes, 0), mdBytes = Buffer.byteLength(md.join("\n"));

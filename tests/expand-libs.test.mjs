@@ -65,3 +65,36 @@ test("exportsDigest and shapeOf describe code without prose", async () => {
   assert.match(s, /f: fn\(\) → \[\{ m: string/);
   assert.match(s, /g: fn\(y\) → number/);
 });
+
+test("adoption counts frontier writes, reads and harness commands from a transcript", async () => {
+  const { adoption } = await import("../lib/tokens.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "adopt-"));
+  writeFileSync(join(dir, "a.mjs"), "x".repeat(100));
+  const rec = (content) => JSON.stringify({ type: "assistant", timestamp: "2026-10-22T00:00:01Z", message: { content } });
+  const t = join(dir, "t.jsonl");
+  writeFileSync(t, [
+    rec([{ type: "tool_use", name: "Write", input: { file_path: join(dir, "src/x.mjs"), content: "abcd" } }]),
+    rec([{ type: "tool_use", name: "Write", input: { file_path: join(dir, ".is-worker/expand.json"), content: "{}" } }]),
+    rec([{ type: "tool_use", name: "Read", input: { file_path: join(dir, "a.mjs") } }]),
+    rec([{ type: "tool_use", name: "Edit", input: { file_path: join(dir, "a.mjs"), old_string: "x", new_string: "yy" } }]),
+    rec([{ type: "tool_use", name: "Bash", input: { command: `cat > src/y.mjs <<'EOF'\nhello\nEOF\nnode is-worker.mjs expand --project . --self-test && node is-worker.mjs expand --project . ; node is-worker.mjs digest --query "csv"` } }]),
+    rec([{ type: "tool_use", name: "Write", input: { file_path: "/elsewhere/z.mjs", content: "zzz" } }]),
+  ].join("\n"));
+  const a = adoption({ files: [t], project: dir });
+  assert.deepEqual([a.codeFiles, a.codeBytes, a.specFiles, a.edits, a.editBytes, a.readFiles, a.readBytes], [2, 9, 1, 1, 2, 1, 100]);
+  assert.deepEqual([a.selfTests, a.expandRuns, a.digestQueries, a.digestRuns], [1, 1, 1, 0]);
+});
+
+test("aloneEstimate pools every run of an app and flags another model", async () => {
+  const { aloneEstimate } = await import("../lib/tokens.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "base-"));
+  const u = (o) => ({ calls: 10, input: 0, cache_write: 0, cache_read: 0, output: o });
+  writeFileSync(join(dir, "b.json"), JSON.stringify({ baselines: [
+    { app: "x", model: "claude-fable-5-1", code_bytes: 1000, usage: u(100) },
+    { app: "x", model: "claude-opus-5-5", code_bytes: 2000, usage: u(200) },
+    { app: "x", model: "claude-opus-5-5", code_bytes: 4000, usage: u(400) } ] }));
+  const same = aloneEstimate({ baselinesFile: join(dir, "b.json"), baselineApp: "x", model: "claude-opus-5-5" });
+  assert.deepEqual([same.n, same.usage.output, same.code_bytes, same.modelMismatch], [2, 300, 3000, null]);
+  const other = aloneEstimate({ baselinesFile: join(dir, "b.json"), baselineApp: "x", model: "claude-sonnet-5-5" });
+  assert.deepEqual([other.n, other.modelMismatch], [3, "claude-fable-5-1"]);
+});
