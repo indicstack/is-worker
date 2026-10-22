@@ -7,7 +7,7 @@
 //   per-ticket ones of troubled tickets) over the whole code in one call. --gate first has the worker model judge every
 //   statement and close the confident ones (0.8.0–0.8.2 default; 36 s of qwen for little gain). --full is the pre-0.8.0
 //   prose review of the diff.
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, spawn } from "node:child_process";
@@ -36,7 +36,7 @@ async function keyFor() {
   return process.env.INDICSTACK_API_KEY || keyFor("A");
 }
 function listRuns() { const d = resolve(pwr, "runs"); return existsSync(d) ? readdirSync(d).filter((n) => existsSync(resolve(d, n, "meta.json"))).sort() : []; }
-function lastRun() { const r = listRuns().filter((n) => /-A(-\d+)?$/.test(n)); return r.length ? resolve(pwr, "runs", r.at(-1)) : null; }
+function lastRun() { const r = listRuns().filter((n) => /-A(-\d+)?(-expand(-\d+)?)?$/.test(n)); return r.length ? resolve(pwr, "runs", r.at(-1)) : null; }
 // The run `review` and `table` work on: --run <dir> if given, else the latest. Fails in one line that says where it looked and what to do.
 function pickRun() {
   const run = args.run ? resolve(String(args.run)) : lastRun();
@@ -245,20 +245,31 @@ async function review() {
   say(`verdict: ${verdict || "(no REVIEW.md written)"}`);
 }
 
+// expand (0.9.0): the frontier model writes one example + a test template + a target list (.is-worker/expand.json); qwen
+// writes every target, four at a time, tested per target. No brief, no tickets, no planning turns.
+async function expand() {
+  if (args.reference) { node("scripts/expand.mjs", ["--reference"]); return; }
+  const key = await keyFor();
+  if (!key) die("no IndicStack key (doctor says how to save it)");
+  const r = node("scripts/expand.mjs", ["--spec", String(args.spec || resolve(pwr, "expand.json")), ...(args["self-test"] ? ["--self-test"] : []), ...(args.verbose ? ["--verbose"] : []), ...(args.reference ? ["--reference"] : [])], { env: { IS_WORKER_API_KEY: key } });
+  if (r.status === 2) die("expand failed");
+}
+
 async function table() {
   const run = pickRun();
-  const { summarize, readMeta } = await import("../lib/runs.mjs");
+  const { summarize, readMeta, runPaths } = await import("../lib/runs.mjs");
   const T = await import("../lib/tokens.mjs");
   const m = readMeta(run), s = summarize(run);
   // The milestone = every run built from the same frozen brief (a resume or a re-run after a queue counts too).
-  const runs = m.briefHash ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => { const x = readMeta(d); return x && x.briefHash === m.briefHash && x.mode === m.mode; }) : [run];
+  const runs = m.kind === "expand" && !args.run ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => readMeta(d)?.kind === "expand")
+    : m.briefHash ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => { const x = readMeta(d); return x && x.briefHash === m.briefHash && x.mode === m.mode; }) : [run];
   const metas = runs.map((d) => readMeta(d)).filter(Boolean);
   const firstStart = metas.map((x) => x.started).filter(Boolean).sort()[0];
   const ends = metas.flatMap((x) => [x.finished, x.reviewedAt]).filter(Boolean).sort();
   const lastEnd = ends.length ? new Date(ends.at(-1)).getTime() + 15 * 60 * 1000 : Date.now();
   const until = args.until ? new Date(String(args.until)).toISOString() : new Date(Math.min(Date.now(), lastEnd)).toISOString();
   const worker = T.workerUsage(runs);
-  const found = T.plannerUsage({ project, firstRunStart: firstStart, until });
+  const found = T.plannerUsage({ project, firstRunStart: firstStart, until, kind: m.kind || "run", transcript: args.transcript ? resolve(String(args.transcript)) : null });
   const planner = found && !found.none ? found : null;
   const px = await T.listPrices(planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5");
   const orKey = process.env.OPENROUTER_API_KEY || (await import("../lib/keys.mjs")).keyFor("C") || null;
@@ -279,7 +290,7 @@ async function table() {
   const fModel = planner?.models?.[0] || m.reviewerModel || "frontier";
   const code = T.codeBytes(project);
   const app = String(args.app || project.split(/[\\/]/).pop());
-  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, model: planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5", bytes: code.bytes });
+  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, baselineApp: args.baseline ? String(args.baseline) : null, model: planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5", bytes: code.bytes });
   const fmt = (n) => (n == null ? "?" : Number(n).toLocaleString("en-IN"));
   const col = (u, k) => (u ? fmt(k === "total" ? T.totalOf(u) : k === "new" ? u.input + u.cache_write : u[k]) : "?");
   const W = worker, F = frontier, A = alone?.usage;
@@ -293,15 +304,40 @@ async function table() {
   ];
   // Tokens are not alike: a cache read costs a few percent of a new input token, an output token several times one.
   // The cost row weighs them at list price so the columns can be compared; the worker's is what IndicStack billed.
-  const usd = (u) => (u && px ? `$${T.usdAt(u, px).toFixed(3)}` : "?");
-  rows.push(["Cost at list price", s.cost != null ? `₹${s.cost.toFixed(2)} (IndicStack)` : "?", usd(F), usd(A)]);
+  const pxA = alone && alone.basis[0].model !== (planner?.models?.[0]) ? (await T.listPrices(alone.basis[0].model)) || px : px;
+  const usd = (u, p = px) => (u && p ? `$${T.usdAt(u, p).toFixed(3)}` : "?");
+  rows.push(["Cost at list price", s.cost != null ? `₹${s.cost.toFixed(2)} (IndicStack)` : "?", usd(F), usd(A, pxA)]);
   if (F && A && alone.kind === "measured" && px) {
-    const d = T.usdAt(A, px) - T.usdAt(F, px);
-    rows.push(["Frontier cost saved vs alone", "—", `${d >= 0 ? "" : "-"}$${Math.abs(d).toFixed(3)} (${Math.round((1 - T.usdAt(F, px) / T.usdAt(A, px)) * 100)}%)`, "—"]);
+    const d = T.usdAt(A, pxA) - T.usdAt(F, px);
+    rows.push(["Frontier cost saved vs alone", "—", `${d >= 0 ? "" : "-"}$${Math.abs(d).toFixed(3)} (${Math.round((1 - T.usdAt(F, px) / T.usdAt(A, pxA)) * 100)}%)`, "—"]);
   }
-  const aloneHead = alone ? `Frontier alone (${alone.kind})` : "Frontier alone (no baseline yet)";
+  // Frontier cost per KB of finished code: the comparison that does not depend on how big each build came out.
+  const kbOf = (b) => b / 1024;
+  const aloneKB = alone?.kind === "measured" ? (alone.code_bytes || alone.basis[0].code_bytes) : code.bytes;
+  const perKB = (b) => T.usdAt(b.usage, pxA) / kbOf(b.code_bytes);
+  const aloneRange = alone?.n > 1 && pxA ? ` range $${Math.min(...alone.basis.map(perKB)).toFixed(4)}–$${Math.max(...alone.basis.map(perKB)).toFixed(4)}` : "";
+  if (px) rows.push(["Frontier $ per KB of code", "—", F ? `$${(T.usdAt(F, px) / kbOf(code.bytes)).toFixed(4)} (${(code.bytes / 1024).toFixed(1)} KB)` : "?", A ? `$${(T.usdAt(A, pxA) / kbOf(aloneKB)).toFixed(4)} (${(aloneKB / 1024).toFixed(1)} KB${aloneRange})` : "?"]);
+  const aloneHead = alone ? `Frontier alone (${alone.kind}${alone.n ? `, n=${alone.n}` : ""})` : "Frontier alone (no baseline yet)";
   const tbl = `| | Worker | Frontier with is-worker | ${aloneHead} |\n|---|---|---|---|\n` + rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
   const notes = [];
+  let expandKB = null;
+  if (m.kind === "expand") {
+    // Latest status per target path across every expand run of this project.
+    const { readJsonl } = await import("../lib/jsonl.mjs");
+    const latest = new Map();
+    for (const d of runs) for (const t of readJsonl(runPaths(d).tickets)) latest.set(t.path, t);
+    const okPaths = [...latest.values()].filter((t) => t.status === "ok").map((t) => t.path);
+    const kb = okPaths.reduce((a, f) => a + (existsSync(resolve(project, f)) ? statSync(resolve(project, f)).size : 0), 0) / 1024;
+    s.tickets_total = latest.size; s.tickets_passed_first_try = [...latest.values()].filter((t) => t.status === "ok" && t.attempts === 1).length;
+    s.tests_final = { pass: okPaths.length, fail: latest.size - okPaths.length };
+    expandKB = kb;
+    notes.push(`From expand: ${okPaths.length} file(s), ${kb.toFixed(1)} KB of ${(code.bytes / 1024).toFixed(1)} KB (${Math.round((100 * kb * 1024) / code.bytes)}%).`);
+  }
+  if (planner) {
+    const ad = T.adoption({ files: planner.files, since: planner.since, until, project });
+    const kb = (b) => (b / 1024).toFixed(1);
+    notes.push(`Adoption (from this chat's tool calls): the frontier wrote ${ad.codeFiles} app file(s), ${kb(ad.codeBytes)} KB, itself, plus ${ad.edits} edit(s) (${kb(ad.editBytes)} KB) and ${kb(ad.specBytes)} KB of harness specs in .is-worker/; ${expandKB != null ? `qwen wrote ${kb(expandKB * 1024)} KB (${Math.round((100 * expandKB * 1024) / code.bytes)}% of the app); ` : ""}it opened ${ad.readFiles} project file(s) (${kb(ad.readBytes)} KB) with Read; expand runs ${ad.expandRuns} (+${ad.selfTests} self-test), digest runs ${ad.digestRuns}, digest queries ${ad.digestQueries}.${m.kind === "expand" && !ad.expandRuns ? " ⚠ No expand run in this chat: the worker numbers are not from this build." : ""}`);
+  }
   const tests = s.tests_final ? `${s.tests_final.pass}/${s.tests_final.pass + s.tests_final.fail}` : "?";
   notes.push(`Milestone: ${runs.length} run(s) from brief ${String(m.briefHash).slice(0, 8)} (${runs.map((d) => d.split(/[\\/]/).pop()).join(", ")}); ${s.tickets_passed_first_try}/${s.tickets_total} first try, final tests ${tests}. App: ${(code.bytes / 1024).toFixed(1)} KB in ${code.files} files.`);
   notes.push(`Worker: summed from ${W.calls} API calls' usage (calls.jsonl).`);
@@ -310,9 +346,10 @@ async function table() {
     ? `Frontier with is-worker: this Claude Code session only (${planner.session.split(/[\\/]/).pop().slice(0, 8)}…, ${planner.files.length} transcript file(s) incl. its subagents), usage block of every API call from ${planner.since.slice(0, 19)}Z to ${until.slice(0, 19)}Z, plus ${revNote}. Output = visible reply text counted with ${outMethod}; hidden thinking is not counted on either side.`
     : `Frontier with is-worker: ${found?.none || "the running session's transcript was not found (non-Claude IDE)"}; shown as ?. Run \`table\` from the chat that ran /is-worker to count its planning.`);
   if (px) notes.push(`List prices (${px.id}, OpenRouter): $${px.in}/M new input, $${px.cr}/M cache read, $${px.out}/M output. A cache-read token costs ${Math.round(100 * px.cr / px.in)}% of a new-input token; that is why the cost row, not the token total, is the comparison.`);
-  if (alone?.kind === "measured") notes.push(`Frontier alone: measured — ${alone.basis[0].source}.`);
+  if (alone?.kind === "measured") notes.push(`Frontier alone: measured — ${alone.basis.map((b) => `${b.date} ${b.model}: ${b.source}`).join("; ")}.${alone.n === 1 ? " One run only: record more with `baseline` (each run is kept and pooled) before trusting a small difference." : ""}`);
   else if (alone) notes.push(`Frontier alone: estimated as tokens per KB of finished code × this app's ${(code.bytes / 1024).toFixed(1)} KB, pooled over ${alone.basis.length} measured build(s): ${alone.basis.map((b) => `${b.app} ${fmt(Math.round(T.totalOf(b.usage) / (b.code_bytes / 1024)))} tok/KB`).join(", ")}. Range from those builds: ${fmt(alone.range[0])}–${fmt(alone.range[1])} tokens.`);
   else notes.push("Frontier alone: no measured baseline for this model yet. Record one with `is-worker.mjs baseline`.");
+  if (alone?.modelMismatch) notes.push(`⚠ Model mismatch: the baseline was built by ${alone.modelMismatch}, this build by ${fModel}. Each column is priced at its own model's list price, but the comparison is not like for like. Record a ${fModel} baseline.`);
   const out = tbl + "\n\n" + notes.join("\n");
   say(out);
   writeFileSync(resolve(run, "TABLE.md"), out + "\n");
@@ -332,7 +369,8 @@ async function baseline() {
   const code = T.codeBytes(resolve(String(args.dir)));
   const f = resolve(HOME, "alone-baselines.json");
   const j = readJson(f) || { about: "Measured frontier-alone builds (no harness), read by `table` for the Frontier alone column.", baselines: [] };
-  j.baselines = j.baselines.filter((b) => b.app !== String(args.app) || b.model !== r.models[0]);
+  // L4: runs are kept and pooled by `table --baseline <app>`; --replace drops this app+model's earlier runs first.
+  if (args.replace) j.baselines = j.baselines.filter((b) => b.app !== String(args.app) || b.model !== r.models[0]);
   j.baselines.push({ app: String(args.app), model: r.models[0], date: new Date().toISOString().slice(0, 10), code_bytes: code.bytes, code_files: code.files, usage: r.usage, output_method: c.method, source: String(args.source || `${r.files.length} transcript file(s)`) });
   writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
   say(`baseline ${args.app} (${r.models[0]}): ${code.files} files, ${(code.bytes / 1024).toFixed(1)} KB, ${r.usage.calls} calls, ${T.totalOf(r.usage).toLocaleString("en-IN")} tokens (output ${r.usage.output.toLocaleString("en-IN")})`);
@@ -348,6 +386,48 @@ async function init() {
   if (r.written.length) say(`Next: open ${r.project} in your IDE and type: use is-worker to build <your idea>`);
 }
 
-const cmds = { init, doctor, status, preflight, run, review, table, baseline };
-if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
+// N7: qwen digests of long files, cached by content hash, so the planner reads DIGESTS.md instead of the files.
+async function digest() {
+  const pass = ["files", "dir", "min", "query", "top"].flatMap((k) => (args[k] ? [`--${k}`, String(args[k])] : []));
+  if (args.query) { const q = node("scripts/digest.mjs", pass); if (q.status) die("digest query failed"); return; }
+  const key = await keyFor();
+  if (!key) die("no IndicStack key (doctor says how to save it)");
+  const r = node("scripts/digest.mjs", pass, { env: { IS_WORKER_API_KEY: key } });
+  if (r.status) die("digest failed");
+}
+
+// The whole sibling route in one foreground command: expand (self-test first), verify every module, optional commit,
+// then the token table. The planner calls it once after writing expand.json, and once more with --verify-only after
+// fixing anything left, so a build stays within a few turns.
+async function build() {
+  const { verify } = await import("../lib/verify.mjs");
+  const spec = String(args.spec || resolve(pwr, "expand.json"));
+  let expandStatus = null;
+  if (!args["verify-only"] && existsSync(spec)) {
+    const key = await keyFor();
+    if (!key) die("no IndicStack key (doctor says how to save it); without it, write the targets yourself and run build --verify-only");
+    expandStatus = node("scripts/expand.mjs", ["--spec", spec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+    if (expandStatus === 2) die("build stopped: the spec is invalid or a self-test failed (see above). Fix it and run build again.");
+  }
+  const v = verify(project, String(args.dir || "src"));
+  say(`verify: ${v.files} module(s); syntax errors ${v.syntax.length}; imported ${v.imported}${v.browserOnly.length ? `; browser-only ${v.browserOnly.length} (${v.browserOnly.map((x) => x.file).join(", ")})` : ""}; failed ${v.failed.length}`);
+  for (const x of [...v.syntax, ...v.failed]) say(`  ✗ ${x.file}: ${x.error}`);
+  if (args["target-kb"]) {
+    const { codeBytes } = await import("../lib/tokens.mjs");
+    const kb = codeBytes(project).bytes / 1024, want = Number(args["target-kb"]);
+    say(kb < 0.8 * want ? `size: ${kb.toFixed(1)} KB of the ${want} KB asked (${Math.round((100 * kb) / want)}%) — under 80%: add targets to expand.json, not hand-written files, then run build again` : `size: ${kb.toFixed(1)} KB of the ${want} KB asked`);
+  }
+  if (expandStatus === 1) say("expand left target(s) above: fix the closest candidate on disk, then run build --verify-only --commit \"…\"");
+  if (!v.ok || expandStatus === 1) process.exit(1);
+  if (args.commit) {
+    const g = (a) => spawnSync("git", a, { cwd: project, encoding: "utf8" });
+    g(["add", "-A"]);
+    const c = g(["commit", "-qm", String(args.commit)]);
+    say(c.status === 0 ? `committed ${g(["rev-parse", "--short", "HEAD"]).stdout.trim()}` : `commit skipped: ${(c.stdout + c.stderr).trim().split("\n")[0]}`);
+  }
+  if (listRuns().length) await table();
+}
+
+const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand, digest, build };
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand|digest|build --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));

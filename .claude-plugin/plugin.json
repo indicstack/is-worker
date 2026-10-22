@@ -1,8 +1,8 @@
 {
   "name": "is-worker",
-  "displayName": "IndicStack worker (/is-worker)",
-  "version": "0.8.6",
-  "description": "Build features with Claude planning and reviewing while IndicStack's Qwen model writes every ticket; scripts check every answer. Command: /is-worker. Ends with a one-row rupee cost/time table.",
+  "displayName": "IndicStack worker",
+  "version": "0.9.0",
+  "description": "Builds apps and features cheaply: Claude writes the novel core, IndicStack's Qwen writes every family of sibling files from one example, scripts test every file. Runs automatically for builds of ~15 KB+ (or /is-worker). Ends with a token table against a measured frontier-alone build.",
   "author": {
     "name": "IndicStack",
     "email": "hariesh.ramanathan@indicstack.ai"

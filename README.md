@@ -80,6 +80,29 @@ Cursor, Codex CLI, OpenCode, Antigravity. The Claude Code plugin is one packagin
 
 The blind review is a second, headless session in an isolated folder. It defaults to `claude` with Opus for the typed call (Sonnet for `--full`; `--model` overrides). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`, and `--reviewer openrouter` posts the folder to OpenRouter with no CLI at all. Only the claude and openrouter reviewers report tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
 
+## What's new in 0.9.0 — the sibling route, automatic
+
+is-worker now decides by itself. The skill triggers on any app-sized request (about 15 KB or more of new code) without `/is-worker`, and picks a route: **direct** for small edits, **siblings** (the default for apps) or **tickets** for large builds without repetition.
+
+The sibling route: Claude writes the novel core and one example per family of similar files (views, charts, small pure modules, data, CSS); IndicStack's qwen writes the rest from `.is-worker/expand.json`; one command finishes the build:
+
+```
+node scripts/is-worker.mjs build --project <dir> --target-kb 100 --commit "message" [--baseline <app>]
+```
+
+It self-tests every pattern on its example (a broken test costs no worker calls), runs expand with three parallel retries for failed targets, checks and imports every module, warns when the app is under 80% of the asked size, commits and prints the token table. Built-in test kinds (`pure-fn`, `html-view`, `svg-chart`) mean Claude writes test data, not test code; `"digest": true` gives qwen the interface from code and a live fixture instead of prose. `expand --reference` prints the whole format. `digest` / `digest --query` let the planner read qwen-written summaries instead of long files. The table now reads the chat's tool calls (an Adoption line: code Claude wrote itself, specs, files opened, harness runs), pools repeated frontier-alone baselines, prices each column at its own model and flags a model mismatch.
+
+Measured on Ledgerly (same spec, Opus 5.5, 22 Oct 2026; one run each):
+
+| Build | Opus calls | App | From qwen | Opus cost | Opus $/KB |
+|---|---|---|---|---|---|
+| Opus alone | 10 | 109.2 KB | — | $1.844 | $0.0169 |
+| 0.8.6-era expand (v2) | 11 | 73.6 KB | 36% | $1.535 | $0.0209 |
+| L1–L4, no turn budget (v3) | 22 | 103.8 KB | 59% | $1.788 | $0.0172 |
+| **0.9.0 four-turn route (v4)** | **5** | 53.4 KB | 51% | **$0.854** | **$0.0160** |
+
+v4 is the first build below Opus alone per KB, at half the Opus calls; it also came out at half the asked size, which the new sizing rule and `--target-kb` warning address. An earlier "Opus alone" Ledgerly baseline was in fact built by claude-fable-5-1; it is relabelled in `alone-baselines.json`.
+
 ## What's new in 0.8.6 — an honest token table
 
 0.8.5's table counted every chat that mentioned the project folder as "planning" (Flappy Bird: 678 calls, 125 million tokens, nine days). 0.8.6 counts only the session that runs `table`, from its `/is-worker` command, and shows `?` from any other chat. It adds a cost-at-list-price row, because a cache-read token is 5% of a new-input token and a token total that is mostly re-reads is not a cost. "Saved vs alone" is shown in cost and only against a measured alone build. The `claude` reviewer falls back to `openrouter` when the CLI is blocked for the account.

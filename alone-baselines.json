@@ -16,6 +16,38 @@
       },
       "output_method": "anthropic/claude-opus-5.5 tokenizer via OpenRouter",
       "source": "Opus 5.5 subagent in Claude Code built the same prompt with no harness, 21 Oct 2026 (42 paradoxes, 7 domains, SVG visual per paradox; node --check + data import check)"
+    },
+    {
+      "app": "ledgerly",
+      "model": "claude-fable-5-1",
+      "date": "2026-10-21",
+      "code_bytes": 125152,
+      "code_files": 40,
+      "usage": {
+        "calls": 11,
+        "input": 322,
+        "cache_write": 81857,
+        "cache_read": 1217944,
+        "output": 60501
+      },
+      "output_method": "\u2248 1,35,042 chars / 2.5",
+      "source": "claude-fable-5-1 alone, fresh chat, 21 Oct 2026 (all 59 calls Fable; was mislabelled as Opus 5.5 before 22 Oct)"
+    },
+    {
+      "app": "ledgerly",
+      "model": "claude-opus-5-5",
+      "date": "2026-10-22",
+      "code_bytes": 111852,
+      "code_files": 37,
+      "usage": {
+        "calls": 10,
+        "input": 20,
+        "cache_write": 112214,
+        "cache_read": 753945,
+        "output": 56608
+      },
+      "output_method": "anthropic/claude-opus-5.5 tokenizer via OpenRouter",
+      "source": "Opus 5.5 subagent, no harness, 22 Oct 2026 (ledgerly-opus-alone f561da4)"
     }
   ]
 }
