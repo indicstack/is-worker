@@ -7,7 +7,7 @@
 //   per-ticket ones of troubled tickets) over the whole code in one call. --gate first has the worker model judge every
 //   statement and close the confident ones (0.8.0–0.8.2 default; 36 s of qwen for little gain). --full is the pre-0.8.0
 //   prose review of the diff.
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, spawn } from "node:child_process";
@@ -36,7 +36,7 @@ async function keyFor() {
   return process.env.INDICSTACK_API_KEY || keyFor("A");
 }
 function listRuns() { const d = resolve(pwr, "runs"); return existsSync(d) ? readdirSync(d).filter((n) => existsSync(resolve(d, n, "meta.json"))).sort() : []; }
-function lastRun() { const r = listRuns().filter((n) => /-A(-\d+)?$/.test(n)); return r.length ? resolve(pwr, "runs", r.at(-1)) : null; }
+function lastRun() { const r = listRuns().filter((n) => /-A(-\d+)?(-expand(-\d+)?)?$/.test(n)); return r.length ? resolve(pwr, "runs", r.at(-1)) : null; }
 // The run `review` and `table` work on: --run <dir> if given, else the latest. Fails in one line that says where it looked and what to do.
 function pickRun() {
   const run = args.run ? resolve(String(args.run)) : lastRun();
@@ -250,24 +250,25 @@ async function review() {
 async function expand() {
   const key = await keyFor();
   if (!key) die("no IndicStack key (doctor says how to save it)");
-  const r = node("scripts/expand.mjs", ["--spec", String(args.spec || resolve(pwr, "expand.json"))], { env: { IS_WORKER_API_KEY: key } });
+  const r = node("scripts/expand.mjs", ["--spec", String(args.spec || resolve(pwr, "expand.json")), ...(args["self-test"] ? ["--self-test"] : [])], { env: { IS_WORKER_API_KEY: key } });
   if (r.status === 2) die("expand failed");
 }
 
 async function table() {
   const run = pickRun();
-  const { summarize, readMeta } = await import("../lib/runs.mjs");
+  const { summarize, readMeta, runPaths } = await import("../lib/runs.mjs");
   const T = await import("../lib/tokens.mjs");
   const m = readMeta(run), s = summarize(run);
   // The milestone = every run built from the same frozen brief (a resume or a re-run after a queue counts too).
-  const runs = m.briefHash ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => { const x = readMeta(d); return x && x.briefHash === m.briefHash && x.mode === m.mode; }) : [run];
+  const runs = m.kind === "expand" && !args.run ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => readMeta(d)?.kind === "expand")
+    : m.briefHash ? listRuns().map((n) => resolve(pwr, "runs", n)).filter((d) => { const x = readMeta(d); return x && x.briefHash === m.briefHash && x.mode === m.mode; }) : [run];
   const metas = runs.map((d) => readMeta(d)).filter(Boolean);
   const firstStart = metas.map((x) => x.started).filter(Boolean).sort()[0];
   const ends = metas.flatMap((x) => [x.finished, x.reviewedAt]).filter(Boolean).sort();
   const lastEnd = ends.length ? new Date(ends.at(-1)).getTime() + 15 * 60 * 1000 : Date.now();
   const until = args.until ? new Date(String(args.until)).toISOString() : new Date(Math.min(Date.now(), lastEnd)).toISOString();
   const worker = T.workerUsage(runs);
-  const found = T.plannerUsage({ project, firstRunStart: firstStart, until, kind: m.kind || "run" });
+  const found = T.plannerUsage({ project, firstRunStart: firstStart, until, kind: m.kind || "run", transcript: args.transcript ? resolve(String(args.transcript)) : null });
   const planner = found && !found.none ? found : null;
   const px = await T.listPrices(planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5");
   const orKey = process.env.OPENROUTER_API_KEY || (await import("../lib/keys.mjs")).keyFor("C") || null;
@@ -288,7 +289,7 @@ async function table() {
   const fModel = planner?.models?.[0] || m.reviewerModel || "frontier";
   const code = T.codeBytes(project);
   const app = String(args.app || project.split(/[\\/]/).pop());
-  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, model: planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5", bytes: code.bytes });
+  const alone = T.aloneEstimate({ baselinesFile: resolve(HOME, "alone-baselines.json"), app, baselineApp: args.baseline ? String(args.baseline) : null, model: planner?.models?.[0] || m.reviewerModel || "claude-opus-5-5", bytes: code.bytes });
   const fmt = (n) => (n == null ? "?" : Number(n).toLocaleString("en-IN"));
   const col = (u, k) => (u ? fmt(k === "total" ? T.totalOf(u) : k === "new" ? u.input + u.cache_write : u[k]) : "?");
   const W = worker, F = frontier, A = alone?.usage;
@@ -308,9 +309,23 @@ async function table() {
     const d = T.usdAt(A, px) - T.usdAt(F, px);
     rows.push(["Frontier cost saved vs alone", "—", `${d >= 0 ? "" : "-"}$${Math.abs(d).toFixed(3)} (${Math.round((1 - T.usdAt(F, px) / T.usdAt(A, px)) * 100)}%)`, "—"]);
   }
+  // Frontier cost per KB of finished code: the comparison that does not depend on how big each build came out.
+  const kbOf = (b) => b / 1024;
+  if (px) rows.push(["Frontier $ per KB of code", "—", F ? `$${(T.usdAt(F, px) / kbOf(code.bytes)).toFixed(4)} (${(code.bytes / 1024).toFixed(1)} KB)` : "?", A ? `$${(T.usdAt(A, px) / kbOf(alone.kind === "measured" ? alone.basis[0].code_bytes : code.bytes)).toFixed(4)} (${((alone.kind === "measured" ? alone.basis[0].code_bytes : code.bytes) / 1024).toFixed(1)} KB)` : "?"]);
   const aloneHead = alone ? `Frontier alone (${alone.kind})` : "Frontier alone (no baseline yet)";
   const tbl = `| | Worker | Frontier with is-worker | ${aloneHead} |\n|---|---|---|---|\n` + rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
   const notes = [];
+  if (m.kind === "expand") {
+    // Latest status per target path across every expand run of this project.
+    const { readJsonl } = await import("../lib/jsonl.mjs");
+    const latest = new Map();
+    for (const d of runs) for (const t of readJsonl(runPaths(d).tickets)) latest.set(t.path, t);
+    const okPaths = [...latest.values()].filter((t) => t.status === "ok").map((t) => t.path);
+    const kb = okPaths.reduce((a, f) => a + (existsSync(resolve(project, f)) ? statSync(resolve(project, f)).size : 0), 0) / 1024;
+    s.tickets_total = latest.size; s.tickets_passed_first_try = [...latest.values()].filter((t) => t.status === "ok" && t.attempts === 1).length;
+    s.tests_final = { pass: okPaths.length, fail: latest.size - okPaths.length };
+    notes.push(`From expand: ${okPaths.length} file(s), ${kb.toFixed(1)} KB of ${(code.bytes / 1024).toFixed(1)} KB (${Math.round((100 * kb * 1024) / code.bytes)}%).`);
+  }
   const tests = s.tests_final ? `${s.tests_final.pass}/${s.tests_final.pass + s.tests_final.fail}` : "?";
   notes.push(`Milestone: ${runs.length} run(s) from brief ${String(m.briefHash).slice(0, 8)} (${runs.map((d) => d.split(/[\\/]/).pop()).join(", ")}); ${s.tickets_passed_first_try}/${s.tickets_total} first try, final tests ${tests}. App: ${(code.bytes / 1024).toFixed(1)} KB in ${code.files} files.`);
   notes.push(`Worker: summed from ${W.calls} API calls' usage (calls.jsonl).`);
