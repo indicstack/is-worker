@@ -80,6 +80,13 @@ Cursor, Codex CLI, OpenCode, Antigravity. The Claude Code plugin is one packagin
 
 The blind review is a second, headless session in an isolated folder. It defaults to `claude` with Opus for the typed call (Sonnet for `--full`; `--model` overrides). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`, and `--reviewer openrouter` posts the folder to OpenRouter with no CLI at all. Only the claude and openrouter reviewers report tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
 
+## What's new in 0.10.2 — opt-in, nothing running in the background
+
+Measured against Claude Opus working alone (Flappy Bird, Ledgerly, Opsdesk; one run each), is-worker was not faster and not reliably cheaper. So 0.10.2 removes everything that could slow down ordinary work:
+
+- **Opt-in only.** The skill runs only when you type `/is-worker` (or name it). Claude no longer picks it on its own for app builds.
+- **No hooks.** The token economizer's Claude Code hooks are no longer registered, so no Python process runs on every tool call or session start. Its code stays in `economizer/` and can be inspected with `is-worker economizer`.
+
 ## What's new in 0.10.1
 
 The size rule is opt-in. Builds plan qwen targets from the requested features only; `--target-kb` and the size planning apply only when the user explicitly asks for a code size. Before, aiming for a size could add files and qwen calls (Ledgerly: 66 qwen calls and 11 min against 21 calls and 5 min) without adding features.

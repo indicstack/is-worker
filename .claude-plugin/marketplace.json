@@ -9,7 +9,7 @@
     {
       "name": "is-worker",
       "source": "./",
-      "description": "IndicStack worker: Claude writes the core, Qwen on IndicStack writes the repetitive files, scripts check every answer. Triggers automatically on app-sized builds.",
+      "description": "IndicStack worker (/is-worker, opt-in): Claude writes the core, Qwen on IndicStack fills repetitive stubs, scripts check every file.",
       "category": "productivity",
       "tags": [
         "indicstack",
