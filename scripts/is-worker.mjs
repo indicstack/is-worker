@@ -346,9 +346,9 @@ async function table() {
     : `Frontier with is-worker: ${found?.none || "the running session's transcript was not found (non-Claude IDE)"}; shown as ?. Run \`table\` from the chat that ran /is-worker to count its planning.`);
   if (px) notes.push(`List prices (${px.id}, OpenRouter): $${px.in}/M new input, $${px.cr}/M cache read, $${px.out}/M output. A cache-read token costs ${Math.round(100 * px.cr / px.in)}% of a new-input token; that is why the cost row, not the token total, is the comparison.`);
   if (alone?.kind === "measured") notes.push(`Frontier alone: measured — ${alone.basis.map((b) => `${b.date} ${b.model}: ${b.source}`).join("; ")}.${alone.n === 1 ? " One run only: record more with `baseline` (each run is kept and pooled) before trusting a small difference." : ""}`);
-  if (alone?.modelMismatch) notes.push(`⚠ Model mismatch: the baseline was built by ${alone.modelMismatch}, this build by ${fModel}. Each column is priced at its own model's list price, but the comparison is not like for like. Record a ${fModel} baseline.`);
   else if (alone) notes.push(`Frontier alone: estimated as tokens per KB of finished code × this app's ${(code.bytes / 1024).toFixed(1)} KB, pooled over ${alone.basis.length} measured build(s): ${alone.basis.map((b) => `${b.app} ${fmt(Math.round(T.totalOf(b.usage) / (b.code_bytes / 1024)))} tok/KB`).join(", ")}. Range from those builds: ${fmt(alone.range[0])}–${fmt(alone.range[1])} tokens.`);
   else notes.push("Frontier alone: no measured baseline for this model yet. Record one with `is-worker.mjs baseline`.");
+  if (alone?.modelMismatch) notes.push(`⚠ Model mismatch: the baseline was built by ${alone.modelMismatch}, this build by ${fModel}. Each column is priced at its own model's list price, but the comparison is not like for like. Record a ${fModel} baseline.`);
   const out = tbl + "\n\n" + notes.join("\n");
   say(out);
   writeFileSync(resolve(run, "TABLE.md"), out + "\n");
