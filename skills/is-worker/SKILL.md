@@ -1,6 +1,6 @@
 ---
 name: is-worker
-description: Build or extend an app or feature cheaply with IndicStack's qwen model writing the repetitive files. Use automatically whenever a request means writing a whole app or a feature with several similar files (views, charts, routes, validators, formatters, data); also on /is-worker. Claude writes the app in one pass and leaves repetitive files as marked stubs; one build command has qwen fill them, tests each against its stub, checks every module, commits and prints a token table. Skip it for small edits and bug fixes.
+description: Opt-in only. Use ONLY when the user explicitly types /is-worker or names is-worker. Never use it on your own for ordinary app, feature or code requests: build those directly. When invoked, Claude writes the app in one pass leaving repetitive files as // @qwen stubs, and one build command has IndicStack's qwen fill and test them.
 ---
 # /is-worker — stub route (0.10.1B)
 
