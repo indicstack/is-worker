@@ -82,7 +82,7 @@ The blind review is a second, headless session in an isolated folder. It default
 
 ## What's new in 0.10.2 — opt-in, nothing running in the background
 
-Measured against Claude Opus working alone (Flappy Bird, Ledgerly, Opsdesk; one run each), is-worker was not faster and not reliably cheaper. So 0.10.2 removes everything that could slow down ordinary work:
+0.10.2 makes is-worker opt-in and removes everything that runs in the background:
 
 - **Opt-in only.** The skill runs only when you type `/is-worker` (or name it). Claude no longer picks it on its own for app builds.
 - **No hooks.** The token economizer's Claude Code hooks are no longer registered, so no Python process runs on every tool call or session start. Its code stays in `economizer/` and can be inspected with `is-worker economizer`.
