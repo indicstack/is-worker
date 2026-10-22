@@ -112,3 +112,12 @@ test("verify separates syntax errors, browser-only modules and real import failu
   assert.equal(v.files, 4); assert.equal(v.syntax.length, 1); assert.equal(v.browserOnly[0].file, "src/dom.mjs");
   assert.ok(v.failed.some((x) => x.file === "src/bad.mjs")); assert.equal(v.ok, false);
 });
+
+test("economizer gate answers no-change before a repository has history", () => {
+  const dir = mkdtempSync(join(tmpdir(), "gate-"));
+  const hook = new URL("../economizer/scripts/te-hook", import.meta.url).pathname;
+  for (const ev of ["SessionStart", "PostToolUse", "Stop"]) {
+    const r = spawnSync(hook, [], { input: JSON.stringify({ hook_event_name: ev, session_id: "t", cwd: dir }), encoding: "utf8", env: { ...process.env, TE_HOME: join(dir, ".te"), HOME: dir } });
+    assert.equal(r.stdout.trim(), "{}", ev);
+  }
+});
