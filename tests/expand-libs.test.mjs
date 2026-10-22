@@ -98,3 +98,17 @@ test("aloneEstimate pools every run of an app and flags another model", async ()
   const other = aloneEstimate({ baselinesFile: join(dir, "b.json"), baselineApp: "x", model: "claude-sonnet-5-5" });
   assert.deepEqual([other.n, other.modelMismatch], [3, "claude-fable-5-1"]);
 });
+
+test("verify separates syntax errors, browser-only modules and real import failures", async () => {
+  const { verify } = await import("../lib/verify.mjs");
+  const { mkdirSync } = await import("node:fs");
+  const dir = mkdtempSync(join(tmpdir(), "verify-"));
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "src/ok.mjs"), "export const a = 1;");
+  writeFileSync(join(dir, "src/dom.mjs"), "document.title = 'x';");
+  writeFileSync(join(dir, "src/bad.mjs"), "import { nope } from './ok.mjs';");
+  writeFileSync(join(dir, "src/syntax.mjs"), "export const = ;");
+  const v = verify(dir);
+  assert.equal(v.files, 4); assert.equal(v.syntax.length, 1); assert.equal(v.browserOnly[0].file, "src/dom.mjs");
+  assert.ok(v.failed.some((x) => x.file === "src/bad.mjs")); assert.equal(v.ok, false);
+});

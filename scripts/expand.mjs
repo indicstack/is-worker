@@ -2,7 +2,7 @@
 // ONE example file per pattern plus data for the tests; qwen writes every other target from them, four at a time; the
 // harness tests each target. No brief, no tickets, no planning turns.
 //   IS_WORKER_PROJECT=<dir> IS_WORKER_API_KEY=… node scripts/expand.mjs --spec .is-worker/expand.json
-// expand.json, one pattern:
+// Full format: docs/expand-reference.md (`expand --reference` prints it). expand.json, one pattern:
 //   { "instructions": "…", "example": {"path": "src/x.mjs", "content": "…", …test fields}, "reads": ["src/shared.mjs"],
 //     "test": {"kind": "pure-fn" | "html-view" | "svg-chart", …} | "test_template": "node:test source with {{path}} and {{params.NAME}}",
 //     "digest": false, "samples": 3, "retries": 1,
@@ -33,15 +33,21 @@ import { exportsDigest, shapeOf } from "../lib/digest.mjs";
 const args = Object.fromEntries(process.argv.slice(2).map((a, i, arr) => a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : []).filter((x) => x.length));
 const key = process.env.IS_WORKER_API_KEY || process.env.INDICSTACK_API_KEY;
 const specPath = resolve(String(args.spec || resolve(IS_WORKER_DIR, "expand.json")));
-if (!existsSync(specPath)) { console.error(`no spec at ${specPath}`); process.exit(2); }
+if (!args.reference && !existsSync(specPath)) { console.error(`no spec at ${specPath}`); process.exit(2); }
+if (args.reference) { console.log(readFileSync(resolve(dirname(new URL(import.meta.url).pathname), "../docs/expand-reference.md"), "utf8")); process.exit(0); }
 const raw = JSON.parse(readFileSync(specPath, "utf8"));
 const patterns = (Array.isArray(raw.patterns) ? raw.patterns : [raw]).map((p, k) => ({
   ...p, name: p.name || p.example?.path || `pattern ${k + 1}`,
   instructions: [raw.patterns ? raw.instructions : "", p.instructions].filter(Boolean).join("\n"),
   reads: [...new Set([...(raw.patterns ? raw.reads || [] : []), ...(p.reads || [])])],
 }));
-for (const p of patterns) if (!p.example?.path || !p.example?.content || !Array.isArray(p.targets) || !p.targets.length) { console.error(`${p.name}: needs example {path, content} and a non-empty targets list`); process.exit(2); }
 const project = WORK_ROOT || process.cwd();
+// The example is a file the frontier already wrote: by default its content is read from disk, so the spec never repeats it.
+for (const p of patterns) {
+  if (typeof p.example === "string") p.example = { path: p.example };
+  if (p.example?.path && p.example.content == null && existsSync(resolve(project, p.example.path))) p.example.content = readFileSync(resolve(project, p.example.path), "utf8");
+  if (!p.example?.path || p.example.content == null || !Array.isArray(p.targets) || !p.targets.length) { console.error(`${p.name}: needs an example file that exists (example.path) and a non-empty targets list`); process.exit(2); }
+}
 const selfTestOnly = Boolean(args["self-test"]);
 if (!key && !selfTestOnly) { console.error("IS_WORKER_API_KEY missing"); process.exit(2); }
 const cfg = armConfig("A");

@@ -248,9 +248,10 @@ async function review() {
 // expand (0.9.0): the frontier model writes one example + a test template + a target list (.is-worker/expand.json); qwen
 // writes every target, four at a time, tested per target. No brief, no tickets, no planning turns.
 async function expand() {
+  if (args.reference) { node("scripts/expand.mjs", ["--reference"]); return; }
   const key = await keyFor();
   if (!key) die("no IndicStack key (doctor says how to save it)");
-  const r = node("scripts/expand.mjs", ["--spec", String(args.spec || resolve(pwr, "expand.json")), ...(args["self-test"] ? ["--self-test"] : []), ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } });
+  const r = node("scripts/expand.mjs", ["--spec", String(args.spec || resolve(pwr, "expand.json")), ...(args["self-test"] ? ["--self-test"] : []), ...(args.verbose ? ["--verbose"] : []), ...(args.reference ? ["--reference"] : [])], { env: { IS_WORKER_API_KEY: key } });
   if (r.status === 2) die("expand failed");
 }
 
@@ -395,6 +396,33 @@ async function digest() {
   if (r.status) die("digest failed");
 }
 
-const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand, digest };
-if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand|digest --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
+// The whole sibling route in one foreground command: expand (self-test first), verify every module, optional commit,
+// then the token table. The planner calls it once after writing expand.json, and once more with --verify-only after
+// fixing anything left, so a build stays within a few turns.
+async function build() {
+  const { verify } = await import("../lib/verify.mjs");
+  const spec = String(args.spec || resolve(pwr, "expand.json"));
+  let expandStatus = null;
+  if (!args["verify-only"] && existsSync(spec)) {
+    const key = await keyFor();
+    if (!key) die("no IndicStack key (doctor says how to save it); without it, write the targets yourself and run build --verify-only");
+    expandStatus = node("scripts/expand.mjs", ["--spec", spec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+    if (expandStatus === 2) die("build stopped: the spec is invalid or a self-test failed (see above). Fix it and run build again.");
+  }
+  const v = verify(project, String(args.dir || "src"));
+  say(`verify: ${v.files} module(s); syntax errors ${v.syntax.length}; imported ${v.imported}${v.browserOnly.length ? `; browser-only ${v.browserOnly.length} (${v.browserOnly.map((x) => x.file).join(", ")})` : ""}; failed ${v.failed.length}`);
+  for (const x of [...v.syntax, ...v.failed]) say(`  ✗ ${x.file}: ${x.error}`);
+  if (expandStatus === 1) say("expand left target(s) above: fix the closest candidate on disk, then run build --verify-only --commit \"…\"");
+  if (!v.ok || expandStatus === 1) process.exit(1);
+  if (args.commit) {
+    const g = (a) => spawnSync("git", a, { cwd: project, encoding: "utf8" });
+    g(["add", "-A"]);
+    const c = g(["commit", "-qm", String(args.commit)]);
+    say(c.status === 0 ? `committed ${g(["rev-parse", "--short", "HEAD"]).stdout.trim()}` : `commit skipped: ${(c.stdout + c.stderr).trim().split("\n")[0]}`);
+  }
+  if (listRuns().length) await table();
+}
+
+const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand, digest, build };
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand|digest|build --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));
