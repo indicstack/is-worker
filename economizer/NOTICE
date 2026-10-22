@@ -1,0 +1,5 @@
+is-worker includes TokenEconomizer (https://github.com/microsoft/TokenEconomizer), Copyright (c) the
+TokenEconomizer authors (UC Berkeley, Microsoft Research, Microsoft Security), licensed under the
+Apache License 2.0 (economizer/LICENSE). Vendored from the commit in economizer/UPSTREAM: the
+stdlib-only package (economizer/lib/tokeneconomizer) and the hook bootstrap; is-worker replaced the
+hook launcher (economizer/scripts/te-hook) to require Python >= 3.10 and dropped its slash commands.

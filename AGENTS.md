@@ -18,7 +18,7 @@ Do these in order and show the user each result in one line. Do not plan or writ
 1. **Node.** Run `node --version`. If it fails or is below 18:
    - Windows: run `winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements`. Then tell the user: "Node is installed. Restart your IDE so it sees it, then ask for is-worker again." Stop. If winget is missing, give https://nodejs.org/en/download and stop.
    - macOS: if `brew` exists run `brew install node`; otherwise give https://nodejs.org/en/download and stop.
-   - Nothing here needs Python.
+   - **Python 3.10+** powers the built-in token economizer (it learns repository facts, prunes unused tools and redirects failing loops, through hooks, with no command). If doctor's `python:` line says OFF, tell the user once: "Install Python 3.10+ (`brew install python@3.12`, `winget install Python.Python.3.12`, or python.org) to turn on the token economizer." Then continue; it is not required to build.
 2. **Connection.** Run `node "IS_WORKER_HOME/scripts/is-worker.mjs" doctor --project PROJECT` and repeat its first line to the user word for word.
    - `IS-WORKER: READY` → continue to the status check below.
    - `IS-WORKER: NOT CONNECTED` (key missing or rejected) → the key must be saved before anything else. If you can open a terminal panel for the user (Claude desktop app, Cursor, Antigravity), run `node "IS_WORKER_HOME/scripts/key.mjs"` there and tell the user to paste their IndicStack key into that panel (typing is hidden) and press Enter. In a CLI tool (Claude Code CLI, Codex CLI, OpenCode), print that command and ask the user to run it in a second terminal. Never ask for the key in chat. When the user says "saved", run doctor again. Repeat until READY.
