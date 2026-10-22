@@ -412,6 +412,11 @@ async function build() {
   const v = verify(project, String(args.dir || "src"));
   say(`verify: ${v.files} module(s); syntax errors ${v.syntax.length}; imported ${v.imported}${v.browserOnly.length ? `; browser-only ${v.browserOnly.length} (${v.browserOnly.map((x) => x.file).join(", ")})` : ""}; failed ${v.failed.length}`);
   for (const x of [...v.syntax, ...v.failed]) say(`  ✗ ${x.file}: ${x.error}`);
+  if (args["target-kb"]) {
+    const { codeBytes } = await import("../lib/tokens.mjs");
+    const kb = codeBytes(project).bytes / 1024, want = Number(args["target-kb"]);
+    say(kb < 0.8 * want ? `size: ${kb.toFixed(1)} KB of the ${want} KB asked (${Math.round((100 * kb) / want)}%) — under 80%: add targets to expand.json, not hand-written files, then run build again` : `size: ${kb.toFixed(1)} KB of the ${want} KB asked`);
+  }
   if (expandStatus === 1) say("expand left target(s) above: fix the closest candidate on disk, then run build --verify-only --commit \"…\"");
   if (!v.ok || expandStatus === 1) process.exit(1);
   if (args.commit) {

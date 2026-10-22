@@ -30,8 +30,8 @@
         "cache_read": 1217944,
         "output": 60501
       },
-      "output_method": "≈ 1,35,042 chars / 2.5",
-      "source": "Opus 5.5 alone, fresh chat, 22 Oct 2026"
+      "output_method": "\u2248 1,35,042 chars / 2.5",
+      "source": "claude-fable-5-1 alone, fresh chat, 21 Oct 2026 (all 59 calls Fable; was mislabelled as Opus 5.5 before 22 Oct)"
     },
     {
       "app": "ledgerly",

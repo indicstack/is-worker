@@ -44,7 +44,7 @@ Keep `cases` minimal (2–3 per target): every case is frontier output. Put edge
 category, a transfer, an empty list) so every view sees them.
 
 ## Running
-`node "$HARNESS/scripts/is-worker.mjs" build --project PROJECT [--commit "message"] [--baseline <app>]` runs, in one
+`node "$HARNESS/scripts/is-worker.mjs" build --project PROJECT [--target-kb N] [--commit "message"] [--baseline <app>]` runs, in one
 foreground command (give it a 10-minute timeout; never background it or poll): self-test of every pattern, expand,
 `node --check` of every module, an import of every `src/` module under Node (browser-only modules are reported, not
 failed), an optional commit, and the token table. Output is a summary; failed targets are listed with their first error
