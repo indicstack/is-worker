@@ -45,6 +45,20 @@ function pickRun() {
 }
 
 // The connection check. Prints one banner line first so a human and Claude both see the state at a glance.
+function economizerPython() {
+  for (const bin of [process.env.TE_PYTHON, "python3.13", "python3.12", "python3.11", "python3.10", "/opt/homebrew/bin/python3", "/usr/local/bin/python3", "python3", "python"].filter(Boolean)) {
+    const r = spawnSync(bin, ["-c", "import sys; print('%d.%d.%d' % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 10) else 1)"], { encoding: "utf8" });
+    if (r.status === 0) return { bin, version: r.stdout.trim() };
+  }
+  return null;
+}
+// `is-worker economizer <status|facts|toolprune|untool|config|repos …>`: the token economizer's own command line.
+async function economizer() {
+  const sub = process.argv.slice(3).filter((a, i, arr) => a !== "--project" && arr[i - 1] !== "--project");
+  const r = spawnSync(resolve(HOME, "economizer/scripts/te"), sub.length ? sub : ["status"], { cwd: project, stdio: "inherit" });
+  process.exit(r.status ?? 1);
+}
+
 async function doctor() {
   const { selectedReviewer, reviewerStatus } = await import("../lib/reviewer.mjs");
   const { armConfig } = await import("../lib/settings.mjs");
@@ -52,6 +66,10 @@ async function doctor() {
   const lines = [];
   let code = 0;
   lines.push(`node: ${process.versions.node} (${process.platform})`);
+  // The built-in token economizer (economizer/, vendored TokenEconomizer) runs from Claude Code hooks under Python >= 3.10.
+  // Without it the hooks answer "no change": builds still work, they just do not get the economizer's savings.
+  const py = economizerPython();
+  lines.push(py ? `python: ${py.version} (${py.bin}) — token economizer on` : "python: none >= 3.10 found — token economizer OFF (install Python 3.10+, e.g. `brew install python@3.12` or python.org; set TE_PYTHON to pick one)");
   // One line per reviewer CLI (claude, codex, opencode; custom only when selected). Only the selected one can set
   // DEGRADED, and only after the key checks below, so a missing key is never hidden behind a missing reviewer.
   let selected; try { selected = selectedReviewer(args.reviewer); } catch (e) { die(e.message); }
@@ -428,6 +446,6 @@ async function build() {
   if (listRuns().length) await table();
 }
 
-const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand, digest, build };
-if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand|digest|build --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
+const cmds = { init, doctor, status, preflight, run, review, table, baseline, expand, digest, build, economizer };
+if (!cmds[cmd]) die("usage: node scripts/is-worker.mjs init|doctor|status|preflight|run|review|table|baseline|expand|digest|build|economizer --project <dir> [--ide claude|cursor|codex|opencode|antigravity|all] [--reviewer claude|codex|opencode|custom|openrouter] [--full]");
 cmds[cmd]().catch((e) => die(String(e.stack || e)));

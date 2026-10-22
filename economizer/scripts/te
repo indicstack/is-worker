@@ -1,0 +1,3 @@
+#!/bin/sh
+# Token economizer command line (status, facts, toolprune, untool, config, repos), run as `is-worker economizer …`.
+IW_TE_ENTRY=cli exec "$(CDPATH= cd -- "${0%/*}" && pwd)/te-hook" "$@"
