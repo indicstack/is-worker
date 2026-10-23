@@ -152,6 +152,10 @@ your-project/
 
 ## 10. Keeping it updated
 
+Check which version you have: in Claude Code run `/plugin list` (it shows `is-worker@indicstack <version>`), or ask Claude Code to run the plugin's doctor — the first line is `is-worker: <version>`.
+
+Update:
+
 ```
 /plugin update is-worker@indicstack
 ```
