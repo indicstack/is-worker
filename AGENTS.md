@@ -16,6 +16,15 @@ In a single Bash call, write every file with heredocs, then run the build:
 3. Mark only what qwen can write from the stub alone. Fewer than 4 stubs: write them in full instead and skip the harness.
 4. End the call with: `node "IS_WORKER_HOME/scripts/is-worker.mjs" build --project PROJECT --commit "<message>"` (foreground, 10-minute timeout). It fills the stubs with qwen (3 parallel retries on failure), tests each against its stub, checks and imports every module, commits and prints the token table.
 
+## Small tasks in existing code (chunk route)
+For a change to an existing project (a fix, a feature, a refactor), qwen is not an agent: it cannot explore the repo and sees only what you give it. You plan, it edits:
+1. Read only the code the change touches. Then, in one Bash call, write `PROJECT/.is-worker/chunks.json` and run the build command above.
+2. `{"goal": "one line", "chunks": [{"id": "short-name", "file": "src/x.mjs", "region": {"start": "exact unique text where the region begins", "end": "exact text where it ends"}, "task": "1-5 lines: what the region must do", "context": ["src/y.mjs", "src/z.mjs:10-60"], "checks": ["m.fn(2) === 4"], "run": ["node", "--test", "test/x.test.mjs"]}]}`
+3. One chunk = one function, class or block, at most ~150 lines out. Omit `region` to write a whole new or small file. Give `context` as line ranges, only what the chunk needs (the build rejects more than ~60k characters). Chunks in the same file run in order; others run in parallel.
+4. Give every chunk a check: `checks` (expressions on the module, for plain .js/.mjs) or `run` (a command, no shell: e.g. `["node", "--test", "test/x.test.mjs"]` or `["npx", "tsc", "--noEmit"]`). Write the test first if none exists.
+5. A chunk qwen cannot finish after 3 retries is reverted and described in `PROJECT/.is-worker/chunks-failed.md` (task, errors, closest candidate). Fix those yourself from that file; do not re-read the rest.
+Skip the chunk route when the whole change is under ~40 lines: write it yourself.
+
 ## Then
 - Build OK → paste the table and one way to open the app. Stop.
 - Files listed as left → fix exactly those (the closest candidate is on disk), then `build --project PROJECT --verify-only --commit "<message>"`.

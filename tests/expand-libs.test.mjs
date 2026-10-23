@@ -137,3 +137,24 @@ test("verify imports modules from a folder whose path has spaces", async () => {
   const v = verify(dir);
   assert.equal(v.imported, 1); assert.equal(v.ok, true);
 });
+
+test("chunks: regions, context slices, spec validation and checks (CRLF safe)", async () => {
+  const { findRegion, contextSlice, validateSpec, checkChunk } = await import("../scripts/chunks.mjs");
+  const { mkdirSync } = await import("node:fs");
+  const dir = mkdtempSync(join(tmpdir(), "chunks "));
+  mkdirSync(join(dir, "src"));
+  writeFileSync(join(dir, "src/a.mjs"), "export const x = 1;\r\nexport function f(n) {\r\n  return n;\r\n}\r\n");
+  const t = "export const x = 1;\r\nexport function f(n) {\r\n  return n;\r\n}\r\n";
+  const r = findRegion(t, { start: "export function f(", end: "\r\n}" });
+  assert.equal(t.slice(r.from, r.to), "export function f(n) {\r\n  return n;\r\n}");
+  assert.match(findRegion(t, { start: "nope" }).error, /not found/);
+  assert.match(findRegion("ab ab", { start: "ab" }).error, /not unique/);
+  assert.match(contextSlice(dir, "src/a.mjs:2-3"), /=== src\/a\.mjs:2-3 ===\nexport function f\(n\) \{\n  return n;$/);
+  assert.deepEqual(validateSpec({ chunks: [{ id: "a", file: "src/a.mjs", task: "t", region: { start: "export function f(" } }] }, dir), []);
+  assert.match(validateSpec({ chunks: [{ file: "src/a.mjs", task: "t", region: { start: "zzz" } }] }, dir)[0], /region start not found/);
+  assert.match(validateSpec({ chunks: [] }, dir)[0], /non-empty/);
+  assert.deepEqual(checkChunk(dir, { file: "src/a.mjs", checks: ["m.f(3) === 3"] }), []);
+  assert.match(checkChunk(dir, { file: "src/a.mjs", checks: ["m.f(3) === 4"] })[0], /check failed/);
+  assert.deepEqual(checkChunk(dir, { file: "src/a.mjs", run: ["node", "-e", "process.exit(0)"] }), []);
+  assert.match(checkChunk(dir, { file: "src/a.mjs", run: ["node", "-e", "process.exit(1)"] })[0], /run failed/);
+});
