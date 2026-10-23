@@ -426,9 +426,16 @@ async function build() {
   // Stubs are filled and tested as plain JavaScript only; say so instead of skipping TypeScript stubs silently.
   const tsStubs = (function walk(d, out = []) { if (!existsSync(d)) return out; for (const e of readdirSync(d, { withFileTypes: true })) { if (e.name.startsWith(".") || e.name === "node_modules") continue; const f = resolve(d, e.name); if (e.isDirectory()) walk(f, out); else if (/\.(ts|tsx|jsx)$/.test(e.name) && /\/\/\s*@qwen\b/.test(readFileSync(f, "utf8"))) out.push(f); } return out; })(resolve(project, String(args.dir || "src")));
   if (tsStubs.length) say(`warning: ${tsStubs.length} @qwen stub(s) in .ts/.tsx/.jsx files are not filled (is-worker fills plain .js/.mjs only): write them yourself`);
-  if (!args["verify-only"] && (stubCount || existsSync(spec))) {
+  const chunkSpec = resolve(pwr, "chunks.json");
+  if (!args["verify-only"] && (stubCount || existsSync(spec) || existsSync(chunkSpec))) {
     const key = await keyFor();
     if (!key) die(`IS-WORKER: NOT CONNECTED — no IndicStack key. Save it with: node "${resolve(HOME, "scripts/key.mjs")}" (in a terminal), or fill the ${stubCount} @qwen stub(s) yourself and run build --verify-only`);
+    // Chunk route (0.11, small tasks in existing code): Opus planned the edits, qwen makes each one, scripts check it.
+    if (existsSync(chunkSpec)) {
+      const ch = node("scripts/chunks.mjs", ["--spec", chunkSpec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+      if (ch === 2) die("build stopped: chunks.json was rejected before any worker call (see above). Fix it and run build again.");
+      if (ch === 1) expandStatus = 1;
+    }
     // Stub route first (0.10.1B): qwen fills every file marked // @qwen, tested against its own stub.
     if (stubCount) {
       const st = node("scripts/stubs.mjs", ["--dir", String(args.dir || "src"), ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
@@ -453,7 +460,7 @@ async function build() {
     const kb = codeBytes(project).bytes / 1024, want = Number(args["target-kb"]);
     say(kb < 0.8 * want ? `size: ${kb.toFixed(1)} KB of the ${want} KB asked (${Math.round((100 * kb) / want)}%) — under 80%: add targets to expand.json, not hand-written files, then run build again` : `size: ${kb.toFixed(1)} KB of the ${want} KB asked`);
   }
-  if (expandStatus === 1) say("the worker left file(s) above: fix the closest candidate on disk, then run build --verify-only --commit \"…\"");
+  if (expandStatus === 1) say("the worker left work above (chunks: see .is-worker/chunks-failed.md): fix the closest candidate on disk, then run build --verify-only --commit \"…\"");
   if (!v.ok || expandStatus === 1) process.exit(1);
   if (args.commit) {
     const g = (a) => spawnSync("git", a, { cwd: project, encoding: "utf8" });

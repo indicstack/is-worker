@@ -80,6 +80,12 @@ Cursor, Codex CLI, OpenCode, Antigravity. The Claude Code plugin is one packagin
 
 The blind review is a second, headless session in an isolated folder. It defaults to `claude` with Opus for the typed call (Sonnet for `--full`; `--model` overrides). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`, and `--reviewer openrouter` posts the folder to OpenRouter with no CLI at all. Only the claude and openrouter reviewers report tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
 
+## What's new in 0.11.0 — small tasks: Opus plans, qwen edits
+
+A chunk route for changes to existing code. qwen 3.8 27B is not run as an agent (it cannot explore a repo, and every turn costs latency). Opus reads only the code the change touches and writes `.is-worker/chunks.json`: each chunk is one region of one file (exact start and end text), a short task, the context qwen may read (files or line ranges, capped at about 60k characters per call so one L40S stays fast), and a check (expressions on the module or a command such as `node --test`). `build` sends each chunk to qwen in a single call, applies the new region, checks it and retries failures three ways in parallel. A chunk that still fails is reverted and written up in `.is-worker/chunks-failed.md` so Opus can fix it from that file alone. Same behaviour on Windows and macOS: Node only, no shell (except `.cmd` tools such as `npx` on Windows), CRLF preserved.
+
+Tested on Flappy Bird (combo scoring, pause overlay, HUD streak): qwen finished 3/3 chunks first try and the tests pass. For a task that small, Opus's cost was about the same with and without the chunk route, so use it for changes with several sizeable regions.
+
 ## What's new in 0.10.3 — Windows fix
 
 - **Fixed: stubs were never filled on Windows.** The stub filler compared its own path as `file://` + a Windows path, which never matched, so it exited without doing anything and the build committed the empty stubs. All three such path checks now use Node's `pathToFileURL`.
