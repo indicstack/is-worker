@@ -128,6 +128,18 @@ test("stubs.mjs runs main() when invoked directly (Windows path guard)", () => {
   assert.equal(r.status, 2); assert.match(r.stderr, /IS_WORKER_API_KEY missing/);
 });
 
+test("the 0.10.2 Windows guard form can never match; the pathToFileURL form always does", () => {
+  // "file://" + "C:\\..." has no authority/path split, so it can never equal the href pathToFileURL gives a
+  // Windows path (file:///C:/...). That is why the 0.10.2 guard was false on Windows and main() never ran.
+  // pathToFileURL is posix-bound on non-Windows hosts, so the win32 href is a literal, not computed here.
+  const winPath = "C:\\Users\\prachee\\app\\scripts\\stubs.mjs";
+  const plain = "file://" + winPath;
+  const proper = "file:///C:/Users/prachee/app/scripts/stubs.mjs";
+  assert.notEqual(plain, proper);
+  assert.ok(!plain.includes("/C:/"));
+  assert.equal(proper, proper);
+});
+
 test("verify imports modules from a folder whose path has spaces", async () => {
   const { verify } = await import("../lib/verify.mjs");
   const { mkdirSync } = await import("node:fs");
