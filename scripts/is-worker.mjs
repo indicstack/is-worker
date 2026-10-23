@@ -425,7 +425,7 @@ async function build() {
   const stubCount = findStubs(resolve(project, String(args.dir || "src"))).length;
   // Stubs are filled and tested as plain JavaScript only; say so instead of skipping TypeScript stubs silently.
   const tsStubs = (function walk(d, out = []) { if (!existsSync(d)) return out; for (const e of readdirSync(d, { withFileTypes: true })) { if (e.name.startsWith(".") || e.name === "node_modules") continue; const f = resolve(d, e.name); if (e.isDirectory()) walk(f, out); else if (/\.(ts|tsx|jsx)$/.test(e.name) && /\/\/\s*@qwen\b/.test(readFileSync(f, "utf8"))) out.push(f); } return out; })(resolve(project, String(args.dir || "src")));
-  if (tsStubs.length) say(`warning: ${tsStubs.length} @qwen stub(s) in .ts/.tsx/.jsx files are not filled (is-worker fills plain .js/.mjs only): write them yourself`);
+  if (tsStubs.length) say(`warning: ${tsStubs.length} @qwen stub(s) in .ts/.tsx/.jsx files are not filled (stubs are plain .js/.mjs only): put them in .is-worker/chunks.json as whole-file chunks instead`);
   const chunkSpec = resolve(pwr, "chunks.json");
   if (!args["verify-only"] && (stubCount || existsSync(spec) || existsSync(chunkSpec))) {
     const key = await keyFor();
