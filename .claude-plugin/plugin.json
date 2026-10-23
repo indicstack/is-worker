@@ -1,7 +1,7 @@
 {
   "name": "is-worker",
   "displayName": "IndicStack worker",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Opt-in (/is-worker): Claude writes the app in one pass and leaves repetitive files as stubs; IndicStack's Qwen fills and tests them. Never runs on its own. Ends with a token table against a measured frontier-alone build.",
   "author": {
     "name": "IndicStack",

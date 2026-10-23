@@ -14,7 +14,9 @@
 //   "context": ["src/state.mjs", "src/config.mjs:1-40"],  // whole files or line ranges qwen may read
 //   "checks": ["m.drawHud.length === 2"],              // JS expressions, m = the changed module (optional)
 //   "run": ["node", "--test", "test/render.test.mjs"]  // a command to run after the chunk (optional, no shell)
-// } ] }
+// } ],
+//   "after": ["npx", "tsc", "--noEmit"]   // optional: ONE project-wide check run once after all chunks (fast for TS)
+// }  Each chunk may carry "req": ["FR-KS-010"] to tie it to a requirement; the run log records it.
 // Works the same on Windows and macOS: Node only, no shell, file URLs from pathToFileURL, LF/CRLF preserved.
 //   IS_WORKER_PROJECT=<dir> IS_WORKER_API_KEY=… node scripts/chunks.mjs [--spec .is-worker/chunks.json] [--verbose]
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
@@ -166,25 +168,32 @@ async function main() {
         return { txt, problems: checkChunk(project, c) };
       };
       let best = await attempt(base, 0, 1);
-      if (!best.problems.length) { ok++; first++; log(`${rel} [${c.id || tid}]: ok`); appendJsonl(p0.tickets, { ts: new Date().toISOString(), ticket: tid, path: rel, chunk: c.id || null, status: "ok", attempts: 1 }); continue; }
+      if (!best.problems.length) { ok++; first++; log(`${rel} [${c.id || tid}]: ok`); appendJsonl(p0.tickets, { ts: new Date().toISOString(), ticket: tid, path: rel, chunk: c.id || null, req: c.req || null, status: "ok", attempts: 1 }); continue; }
       const cands = await Promise.all([0.3, 0.6, 0.9].map((t) => attempt(`${base}\n\n[previous attempt failed] ${best.problems.join("; ")}`, t, 2)));
       const win = cands.find((x) => x.txt != null && !x.problems.length);
-      if (win) { apply(win.txt); ok++; log(`${rel} [${c.id || tid}]: ok on retry`); appendJsonl(p0.tickets, { ts: new Date().toISOString(), ticket: tid, path: rel, chunk: c.id || null, status: "ok", attempts: 2 }); continue; }
+      if (win) { apply(win.txt); ok++; log(`${rel} [${c.id || tid}]: ok on retry`); appendJsonl(p0.tickets, { ts: new Date().toISOString(), ticket: tid, path: rel, chunk: c.id || null, req: c.req || null, status: "ok", attempts: 2 }); continue; }
       for (const x of cands) if (x.txt != null && x.problems.length < best.problems.length) best = x;
       if (original == null) writeFileSync(file, ""); else writeFileSync(file, original); // revert: the repo stays as Opus left it
       failed.push({ c, problems: best.problems, candidate: best.txt });
-      appendJsonl(p0.tickets, { ts: new Date().toISOString(), ticket: tid, path: rel, chunk: c.id || null, status: "queued", attempts: 2, error: best.problems[0] || "failed" });
+      appendJsonl(p0.tickets, { ts: new Date().toISOString(), ticket: tid, path: rel, chunk: c.id || null, req: c.req || null, status: "queued", attempts: 2, error: best.problems[0] || "failed" });
     }
   }));
+  // One project-wide check after every chunk (e.g. tsc or the whole test suite): far faster than one per chunk.
+  let afterFail = null;
+  if (Array.isArray(spec.after) && spec.after.length) {
+    const [cmd, ...rest] = spec.after;
+    const r = spawnSync(cmd === "node" ? process.execPath : cmd, rest, { cwd: project, encoding: "utf8", timeout: DEFAULTS.test_timeout_s * 4000, shell: process.platform === "win32" && cmd !== "node" });
+    if (r.status !== 0) afterFail = `${spec.after.join(" ")} failed after all chunks were applied:\n${String(r.stdout + r.stderr).split(/\r?\n/).filter((l) => /error|fail|assert|✖/i.test(l)).slice(0, 15).join("\n")}`;
+  }
   const fp = resolve(IS_WORKER_DIR, "chunks-failed.md");
-  if (failed.length) {
-    writeFileSync(fp, ["# Chunks the worker could not finish (files reverted; fix these yourself)", "",
+  if (failed.length || afterFail) {
+    writeFileSync(fp, (afterFail ? `# Project check failed (chunks are applied; fix the errors below)\n\n${afterFail}\n\n` : "") + ["# Chunks the worker could not finish (files reverted; fix these yourself)", "",
       ...failed.flatMap(({ c, problems, candidate }) => [`## ${c.id || c.file} — ${c.file}`, `Task: ${c.task}`, `Problems:\n${problems.map((p) => `- ${p}`).join("\n")}`,
         candidate ? `Closest candidate for the region:\n\`\`\`\n${candidate.slice(0, 4000)}\n\`\`\`` : "", ""])].join("\n"));
   } else if (existsSync(fp)) writeFileSync(fp, "");
   updateMeta(run.dir, { status: failed.length ? "needs_claude" : "done", finished: new Date().toISOString(), testsFinal: { pass: ok, fail: failed.length }, firstTry: first });
-  console.log(`chunks: qwen finished ${ok}/${spec.chunks.length} (${first} first try)${failed.length ? `; ${failed.length} reverted and described in ${relative(project, fp).replace(/\\/g, "/")}` : ""}`);
-  if (failed.length) process.exit(1);
+  console.log(`chunks: qwen finished ${ok}/${spec.chunks.length} (${first} first try)${failed.length ? `; ${failed.length} reverted and described in ${relative(project, fp).replace(/\\/g, "/")}` : ""}${afterFail ? `; project check failed (see ${relative(project, fp).replace(/\\/g, "/")})` : ""}`);
+  if (failed.length || afterFail) process.exit(1);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main();
