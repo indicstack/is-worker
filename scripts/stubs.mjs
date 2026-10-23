@@ -7,6 +7,7 @@
 //   IS_WORKER_PROJECT=<dir> IS_WORKER_API_KEY=… node scripts/stubs.mjs [--dir src] [--verbose]
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
 import { resolve, dirname, relative, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { IS_WORKER_DIR, WORK_ROOT } from "../lib/paths.mjs";
 import { FILES_SCHEMA, parseFiles } from "../lib/schema.mjs";
@@ -58,7 +59,7 @@ export function checkFilled(file, stubSrc, cwd) {
   const syn = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
   if (syn.status !== 0) problems.push(`syntax: ${(syn.stderr.split("\n").find((l) => /Error/.test(l)) || "").trim()}`);
   if (!problems.length) {
-    const script = `const m = await import(${JSON.stringify("file://" + file)}).catch((e) => ({ __err: String(e && e.message || e) }));
+    const script = `const m = await import(${JSON.stringify(pathToFileURL(file).href)}).catch((e) => ({ __err: String(e && e.message || e) }));
 const out = { err: m.__err || null, keys: m.__err ? [] : Object.keys(m), tests: [] };
 if (!m.__err) for (const t of ${JSON.stringify(stubTests(stubSrc))}) {
   try { const v = await (0, eval)("(async (m) => (" + t + "))")(m); out.tests.push({ t, ok: Boolean(v) }); }
@@ -160,4 +161,5 @@ async function main() {
   if (left.length) process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+// pathToFileURL, not "file://" + path: on Windows the path is C:\… and the plain string never matches (0.10.2 bug).
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main();

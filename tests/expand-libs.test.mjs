@@ -121,3 +121,19 @@ test("economizer gate answers no-change before a repository has history", () => 
     assert.equal(r.stdout.trim(), "{}", ev);
   }
 });
+
+test("stubs.mjs runs main() when invoked directly (Windows path guard)", () => {
+  const script = new URL("../scripts/stubs.mjs", import.meta.url).pathname;
+  const r = spawnSync(process.execPath, [script], { encoding: "utf8", env: { ...process.env, IS_WORKER_API_KEY: "", INDICSTACK_API_KEY: "" } });
+  assert.equal(r.status, 2); assert.match(r.stderr, /IS_WORKER_API_KEY missing/);
+});
+
+test("verify imports modules from a folder whose path has spaces", async () => {
+  const { verify } = await import("../lib/verify.mjs");
+  const { mkdirSync } = await import("node:fs");
+  const dir = join(mkdtempSync(join(tmpdir(), "v ")), "my app");
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src/a.mjs"), "export const a = 1;");
+  const v = verify(dir);
+  assert.equal(v.imported, 1); assert.equal(v.ok, true);
+});
