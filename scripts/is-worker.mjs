@@ -423,11 +423,22 @@ async function build() {
   let expandStatus = null;
   const { findStubs } = await import("./stubs.mjs");
   const stubCount = findStubs(resolve(project, String(args.dir || "src"))).length;
+  // Stubs are filled and tested as plain JavaScript only; say so instead of skipping TypeScript stubs silently.
+  const tsStubs = (function walk(d, out = []) { if (!existsSync(d)) return out; for (const e of readdirSync(d, { withFileTypes: true })) { if (e.name.startsWith(".") || e.name === "node_modules") continue; const f = resolve(d, e.name); if (e.isDirectory()) walk(f, out); else if (/\.(ts|tsx|jsx)$/.test(e.name) && /\/\/\s*@qwen\b/.test(readFileSync(f, "utf8"))) out.push(f); } return out; })(resolve(project, String(args.dir || "src")));
+  if (tsStubs.length) say(`warning: ${tsStubs.length} @qwen stub(s) in .ts/.tsx/.jsx files are not filled (is-worker fills plain .js/.mjs only): write them yourself`);
   if (!args["verify-only"] && (stubCount || existsSync(spec))) {
     const key = await keyFor();
     if (!key) die(`IS-WORKER: NOT CONNECTED — no IndicStack key. Save it with: node "${resolve(HOME, "scripts/key.mjs")}" (in a terminal), or fill the ${stubCount} @qwen stub(s) yourself and run build --verify-only`);
     // Stub route first (0.10.1B): qwen fills every file marked // @qwen, tested against its own stub.
-    if (stubCount) { const st = node("scripts/stubs.mjs", ["--dir", String(args.dir || "src"), ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status; if (st === 1) expandStatus = 1; if (st === 2) die("build stopped: stub filling could not start (see above)"); }
+    if (stubCount) {
+      const st = node("scripts/stubs.mjs", ["--dir", String(args.dir || "src"), ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+      if (st === 1) expandStatus = 1;
+      if (st === 2) die("build stopped: stub filling could not start (see above)");
+      // Never report success over unfilled stubs: the 0.10.2 Windows bug filled 0 and still committed.
+      const still = findStubs(resolve(project, String(args.dir || "src"))).length;
+      if (still === stubCount) die(`build stopped: the worker filled 0 of ${stubCount} @qwen stub(s); nothing was committed. Run with --verbose, or fill them yourself and run build --verify-only.`);
+      if (still) { say(`${still} of ${stubCount} @qwen stub(s) are still unfilled (listed above).`); expandStatus = 1; }
+    }
     if (existsSync(spec)) {
       const es = node("scripts/expand.mjs", ["--spec", spec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
       if (es === 2) die("build stopped: the spec is invalid or a self-test failed (see above). Fix it and run build again.");
