@@ -65,6 +65,8 @@ async function doctor() {
   const cfg = armConfig("A");
   const lines = [];
   let code = 0;
+  const pluginVersion = readJson(resolve(HOME, ".claude-plugin/plugin.json"))?.version || "?";
+  lines.push(`is-worker: ${pluginVersion}`);
   lines.push(`node: ${process.versions.node} (${process.platform})`);
   // The built-in token economizer (economizer/, vendored TokenEconomizer) runs from Claude Code hooks under Python >= 3.10.
   // Without it the hooks answer "no change": builds still work, they just do not get the economizer's savings.
