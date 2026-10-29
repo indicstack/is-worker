@@ -28,6 +28,17 @@ const node = (script, extra = [], opts = {}) => spawnSync(process.execPath, [res
 const say = (m) => console.log(m);
 const die = (m) => { console.error(m); process.exit(2); };
 const readJson = (p) => (existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null);
+// One check, used by preflight and build: the arm A model must still be in the gateway's listing, or every ticket
+// call is a 4xx. A 401/403 listing answer is not "the model is gone" — the key check owns that — so it is skipped.
+async function listingModelOk(key) {
+  const { armConfig } = await import("../lib/settings.mjs");
+  const modelCfg = armConfig("A");
+  const r = await fetch(`${modelCfg.baseUrl.replace(/\/$/, "")}/models`, { headers: { authorization: `Bearer ${key}` } });
+  if (!r.ok) return null; // key rejected or gateway down: doctor's key check reports it
+  const ids = ((await r.json()).data || []).map((m) => m.id);
+  if (!ids.length) return null;
+  return { ok: ids.includes(modelCfg.model), model: modelCfg.model, ids };
+}
 // One line from a child's failure output: the line that names the problem, never a stack frame.
 const firstError = (out) => { const lines = String(out || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean); return lines.find((l) => /Error:|^(no |review folder|PROMPT-REVIEW|usage:)/.test(l)) || lines.find((l) => !/^(at |node:|Node\.js v|\^+$)/.test(l)) || "failed"; };
 
@@ -93,7 +104,13 @@ async function doctor() {
       const r = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/models`, { headers: { authorization: `Bearer ${key}` }, signal: ctrl.signal });
       clearTimeout(t);
       const body = await r.text().catch(() => "");
-      if (r.status === 200) { let n = "?"; try { n = JSON.parse(body).data.length; } catch {} lines.push(`indicstack api: connected (${cfg.baseUrl}, ${n} models listed, model ${cfg.model})`); }
+      if (r.status === 200) {
+        let data = []; try { data = JSON.parse(body).data || []; } catch {}
+        const ids = data.map((m) => m.id);
+        lines.push(ids.length && !ids.includes(cfg.model)
+          ? `indicstack api: connected (${cfg.baseUrl}, listing ${ids.join(", ")}) — model ${cfg.model} IS NOT IN THE LISTING; set the arm A model to one listed before running (preflight refuses it) — no key rotation fixes this`
+          : `indicstack api: connected (${cfg.baseUrl}, ${ids.length} models listed, model ${cfg.model})`);
+      }
       else if (r.status === 401 || r.status === 403) { lines.push(`indicstack api: KEY REJECTED (HTTP ${r.status}: ${body.slice(0, 120)})`); code = code || 4; }
       else { lines.push(`indicstack api: HTTP ${r.status} from ${cfg.baseUrl} (${body.slice(0, 120)})`); code = code || 5; }
     } catch (e) { lines.push(`indicstack api: UNREACHABLE (${e?.cause?.code || e?.message || e})`); code = code || 5; }
@@ -146,6 +163,15 @@ async function preflight() {
   const check = spawnSync(process.execPath, ["-e", "import('./lib/brief.mjs').then(m=>{m.loadBrief();console.log('ok')})"], { cwd: HOME, encoding: "utf8", env });
   if (!/ok/.test(check.stdout)) die(`brief problem: ${firstError(check.stderr)}`);
   if (!existsSync(resolve(pwr, "tickets.jsonl"))) die("no .is-worker/tickets.jsonl");
+  // Stale-model guard: if the selected model was removed from the gateway's listing, no call will work — every one is
+  // a 4xx that costs a ticket. Fail here with the fix, instead of after a failed probe or a failed run.
+  try {
+    const check = await listingModelOk(key);
+    if (check) {
+      if (!check.ok) die(`model ${check.model} is not in the IndicStack listing (${check.ids.join(", ")}). Set the arm A model to one that is — the is-worker UI or \`node "${resolve(HOME, "probe.mjs")}" --arm A --find-model\` — then re-run.`);
+      say(`models listed: ${check.ids.join(", ")}`);
+    }
+  } catch (e) { say(`model listing check: skipped (${e?.cause?.code || e?.message || e})`); }
   const probe = readJson(resolve(pwr, "state", "probe-A.json"));
   const fresh = probe && Date.now() - new Date(probe.at) < 24 * 3600 * 1000;
   if (!fresh) { say("probe: running (one call + max_tokens ladder)"); const r = node("probe.mjs", ["--arm", "A"], { env: { IS_WORKER_API_KEY: key } }); if (r.status !== 0) die("probe failed"); } else say(`probe: fresh (${probe.at.slice(0, 16)}, window ${probe.context_window})`);
@@ -432,6 +458,11 @@ async function build() {
   if (!args["verify-only"] && (stubCount || existsSync(spec) || existsSync(chunkSpec))) {
     const key = await keyFor();
     if (!key) die(`IS-WORKER: NOT CONNECTED — no IndicStack key. Save it with: node "${resolve(HOME, "scripts/key.mjs")}" (in a terminal), or fill the ${stubCount} @qwen stub(s) yourself and run build --verify-only`);
+    // Same stale-model guard as preflight: a removed model burns every ticket on 4xx calls, so stop before the first one.
+    try {
+      const check = await listingModelOk(key);
+      if (check && !check.ok) die(`model ${check.model} is not in the IndicStack listing (${check.ids.join(", ")}). Set the arm A model to one that is — the is-worker UI or \`node "${resolve(HOME, "probe.mjs")}" --arm A --find-model\` — then re-run.`);
+    } catch {}
     // Chunk route (0.11, small tasks in existing code): Opus planned the edits, qwen makes each one, scripts check it.
     if (existsSync(chunkSpec)) {
       const ch = node("scripts/chunks.mjs", ["--spec", chunkSpec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
