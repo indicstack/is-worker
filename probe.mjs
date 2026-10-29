@@ -43,6 +43,11 @@ async function main() {
     if (!cfg.model && matches.length === 1) { writeSettings({ [arm]: { model: matches[0].id } }); say(`model set to ${matches[0].id}`); cfg.model = matches[0].id; }
     if (!cfg.model) { save(); say("pick a model id from the list above in the UI, then probe again"); return; }
     const chosen = ids.find((x) => x.id === cfg.model);
+    if (ids.length && !chosen) {
+      out.steps.push({ step: "model_gone", status: m.status, listed: ids.length, wanted: cfg.model });
+      say(`model ${cfg.model} is not in the listing (${ids.join(", ")}). Pick one above in the is-worker UI (or run probe.mjs --arm ${arm} --find-model) and probe again; no calls were made.`);
+      save(); process.exit(1);
+    }
     if (chosen?.pricing) {
       const perM = (v) => (v == null ? null : Number(v) * 1e6);
       writeSettings({ [arm]: { priceInPerM: perM(chosen.pricing.prompt), priceOutPerM: perM(chosen.pricing.completion) } });
