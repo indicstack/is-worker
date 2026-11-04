@@ -54,6 +54,7 @@ async function main() {
 
   // 1. one real call
   const r1 = await chatStream({ baseUrl: cfg.baseUrl, apiKey, body: tiny(200), ...clocks });
+  if (r1.kind === "http_error" && [401, 403].includes(r1.status)) { say(`IndicStack rejected the key (HTTP ${r1.status}: ${(r1.error || "").slice(0, 160)}) — fix the key or top up the account, then probe again.`); process.exit(76); }
   const parsed = r1.kind === "ok" ? parseFiles(r1.text) : { ok: false };
   out.steps.push({ step: "one_call", provider: r1.provider, served_model: r1.servedModel, kind: r1.kind, status: r1.status, seconds: r1.seconds, ttft: r1.ttft, usage: r1.usage, reasoning_chars: r1.reasoningChars, schema_honoured: parsed.ok, text: r1.text.slice(0, 300), error: r1.error });
   say(`one call: ${r1.kind} provider=${r1.provider} model=${r1.servedModel} http=${r1.status} ${r1.seconds.toFixed(2)}s ttft=${r1.ttft?.toFixed?.(2)} reasoning_chars=${r1.reasoningChars} schema=${parsed.ok} usage=${JSON.stringify(r1.usage)}`);

@@ -119,6 +119,7 @@ async function main() {
     try {
       const r = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
         body: JSON.stringify({ model: cfg.model, temperature, max_tokens: DEFAULTS.first_run_answer_tokens * 3, chat_template_kwargs: { enable_thinking: false }, response_format: { type: "json_schema", json_schema: FILES_SCHEMA }, messages: [{ role: "system", content: system }, { role: "user", content: user }] }) });
+      if ([401, 403].includes(r.status)) { console.error(`stubs: IndicStack rejected the key (HTTP ${r.status}) — stop: fix the key or top up the account, then run build again.`); process.exit(76); }
       const j = await r.json();
       limiter.release(r.ok && !j.error ? "clean" : "other");
       return { ok: r.ok && !j.error, text: j.choices?.[0]?.message?.content || "", error: j.error ? JSON.stringify(j.error).slice(0, 200) : null, seconds: (performance.now() - t0) / 1000, usage: j.usage || {} };

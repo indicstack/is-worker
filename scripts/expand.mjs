@@ -99,6 +99,7 @@ async function ask(messages, temperature) {
   const t0 = performance.now();
   try {
     const r = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify(body) });
+    if ([401, 403].includes(r.status)) { console.error(`expand: IndicStack rejected the key (HTTP ${r.status}) — stop: fix the key or top up the account, then run build again.`); process.exit(76); }
     const j = await r.json();
     const u = j.usage || {};
     return { ok: r.ok && !j.error, text: j.choices?.[0]?.message?.content || "", error: j.error ? JSON.stringify(j.error).slice(0, 300) : null, seconds: (performance.now() - t0) / 1000, usage: { prompt_tokens: u.prompt_tokens ?? null, completion_tokens: u.completion_tokens ?? null, cost: Number.isFinite(u.cost) ? u.cost : null } };

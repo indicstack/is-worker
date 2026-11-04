@@ -125,6 +125,10 @@ async function status() {
   say(`last run: ${run ? `${run.split("/").pop()} ${meta.status} tests ${JSON.stringify(meta.testsFinal || null)} review ${meta.reviewVerdict || "none"}` : "none"}`);
 }
 
+// Exit 76 from any fill script or the worker means the gateway rejected the key mid-run (401/403).
+// Unlike 429s, retrying cannot help: the key is dead until it is fixed or the account is topped up.
+const keyRejectedDie = () => `IndicStack rejected the key (HTTP 401/403) — it is invalid, or the account has no credit. Fix the key with: node "${resolve(HOME, "scripts/key.mjs")}" (in a terminal), or top up the account, then run build again.`;
+
 async function requireConnected() {
   const r = node("scripts/is-worker.mjs", ["doctor", "--project", project, ...(args.reviewer ? ["--reviewer", String(args.reviewer)] : [])], { quiet: true });
   process.stdout.write(r.stdout || "");
@@ -161,6 +165,7 @@ async function run() {
   const key = await keyFor(); if (!key) die("no key");
   const r = node("worker.mjs", ["--arm", "A", ...(args.resume ? ["--run", String(args.resume)] : [])], { env: { IS_WORKER_API_KEY: key } });
   if (r.status === 75) die("credit breaker tripped: 6 consecutive 429s. Top up, then rerun with --resume <run dir>.");
+  if (r.status === 76) { const last = lastRun(); const kr = last ? readJson(resolve(last, "key-rejected.json")) : null; die(`IndicStack rejected the key (HTTP ${kr?.status ?? "?"}: ${(kr?.error || "").slice(0, 160)}). Nothing was queued. Fix the key with: node "${resolve(HOME, "scripts/key.mjs")}" (in a terminal), or top up the account, then re-run.`); }
   if (r.status !== 0) die(`worker exited ${r.status}`);
   const meta = readJson(resolve(lastRun(), "meta.json"));
   say(`run ${meta.id}: ${meta.status}, final tests ${JSON.stringify(meta.testsFinal)}`);
@@ -435,12 +440,14 @@ async function build() {
     // Chunk route (0.11, small tasks in existing code): Opus planned the edits, qwen makes each one, scripts check it.
     if (existsSync(chunkSpec)) {
       const ch = node("scripts/chunks.mjs", ["--spec", chunkSpec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+      if (ch === 76) die(keyRejectedDie());
       if (ch === 2) die("build stopped: chunks.json was rejected before any worker call (see above). Fix it and run build again.");
       if (ch === 1) expandStatus = 1;
     }
     // Stub route first (0.10.1B): qwen fills every file marked // @qwen, tested against its own stub.
     if (stubCount) {
       const st = node("scripts/stubs.mjs", ["--dir", String(args.dir || "src"), ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+      if (st === 76) die(keyRejectedDie());
       if (st === 1) expandStatus = 1;
       if (st === 2) die("build stopped: stub filling could not start (see above)");
       // Never report success over unfilled stubs: the 0.10.2 Windows bug filled 0 and still committed.
@@ -450,6 +457,7 @@ async function build() {
     }
     if (existsSync(spec)) {
       const es = node("scripts/expand.mjs", ["--spec", spec, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+      if (es === 76) die(keyRejectedDie());
       if (es === 2) die("build stopped: the spec is invalid or a self-test failed (see above). Fix it and run build again.");
       if (es === 1) expandStatus = 1;
     }
