@@ -80,6 +80,16 @@ Cursor, Codex CLI, OpenCode, Antigravity. The Claude Code plugin is one packagin
 
 The blind review is a second, headless session in an isolated folder. It defaults to `claude` with Opus for the typed call (Sonnet for `--full`; `--model` overrides). `--reviewer codex` runs `codex exec`, `--reviewer opencode` runs `opencode run`, `--reviewer custom` runs any command from `IS_WORKER_REVIEW_CMD`, for example `IS_WORKER_REVIEW_CMD='mytool --cwd "{folder}" "{prompt}"'`, and `--reviewer openrouter` posts the folder to OpenRouter with no CLI at all. Only the claude and openrouter reviewers report tokens and cost; the others show `?` in those columns. `doctor` lists every reviewer CLI it finds and says DEGRADED only when the selected one is missing (runs still work; the review is skipped). The exact CLI flags are in `lib/reviewer.mjs` with the versions they were written against. The IndicStack key is saved the same way in every IDE: `node ~/is-worker/scripts/key.mjs` in your own terminal, never in chat.
 
+## What's new in 0.11.3 — catch a removed model before it burns tickets
+
+On 25 Oct, `gemma4-31b` and `medgemma4-4b` left IndicStack's model listing but kept answering every call with a 4xx, so a build pointed at one of them failed on every ticket and paid for each 4xx. is-worker now checks the listing before it spends anything:
+
+- **`doctor`** says plainly when the arm A model is not in the listing, names every model that is, and notes that no key rotation fixes it — you have to set the arm A model to one that is listed.
+- **`preflight` and `build`** refuse to start (exit 2, before the first paid call) with the same message and the fix: set the arm A model to a listed one, in the is-worker UI or `node probe.mjs --arm A --find-model`.
+- **`probe.mjs`** reports when the model it was given is no longer in the listing, with the current list, and makes no calls.
+
+The listing check skips a 401/403 (the key check owns that) and a downed gateway, so it never masks a real connectivity problem.
+
 ## What's new in 0.11.1 — once on, used for every change
 
 - **Sticky:** after you invoke is-worker (or tell Claude to use it), Claude applies it to every change in the session, at any size, until you say stop. Before each change it says in one line what goes to qwen and what it writes itself; after each build it says what qwen wrote. It no longer skips silently.
