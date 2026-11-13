@@ -1,9 +1,11 @@
 // One ticket per call. Runs every ticket for an arm through the outcome table, check.mjs, and the Claude queue.
 //   node worker.mjs --arm A [--run runs/<id>]   (resumes when --run is given)
 // Arm B never calls an API: every ticket goes to claude-queue.jsonl for the planner session.
+// A 401/403 is not an outcome: the key is dead for the whole run, so the run stops (marker file, no queue)
+// and exits breaker_exit_code + 1 (76), so `is-worker.mjs run` can tell "fix the key" from "top up".
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { ROOT, loadBrief } from "./lib/brief.mjs";
 import { loadTickets, buildMessages, buildBody, promptChars, ticketKey } from "./lib/prompt.mjs";
 import { chatStream, totalTimeoutMs, tokensEstimate } from "./lib/client.mjs";
@@ -97,6 +99,13 @@ async function runTicket({ ticket, arm, cfg, cal, probe, p, apiKey, limiter, sta
       if (timeoutRetries++ >= 1) { enqueueForClaude(p.dir, ticket, `${r.kind} twice`); recordTicket(p.dir, { ticket: ticket.id, status: "queued", attempts: attempt, error: r.kind }); return { status: "queued" }; }
       await sleep(DEFAULTS.timeout_retry_wait_s * 1000); continue;
     }
+    if (r.kind === "http_error" && [401, 403].includes(r.status)) {
+      // A rejected key will reject every call for the rest of the run: do not queue the tickets (a dead key
+      // would burn one frontier call per queued ticket on resume). Write the marker, stop the run, exit 76.
+      writeFileSync(resolve(p.dir, "key-rejected.json"), JSON.stringify({ status: r.status, error: r.error?.slice(0, 500), at: new Date().toISOString() }, null, 2) + "\n");
+      log(p, `key rejected (HTTP ${r.status}) — stopping the run; nothing queued. Fix the key or top up the account, then re-run.`);
+      return { status: "key_rejected" };
+    }
     if (r.kind === "http_error") { enqueueForClaude(p.dir, ticket, `HTTP ${r.status}: ${r.error}`); recordTicket(p.dir, { ticket: ticket.id, status: "queued", attempts: attempt, error: `http_${r.status}` }); return { status: "queued" }; }
     if (r.kind === "length" || r.kind === "empty_content") {
       const doubled = window ? Math.min(maxTokens * 2, window - est - DEFAULTS.spare_tokens) : maxTokens * 2;
@@ -147,6 +156,13 @@ async function main() {
 
   const apiKey = process.env.IS_WORKER_API_KEY || "";
   if (!apiKey) { console.error("IS_WORKER_API_KEY missing in env (the UI passes it from ~/.is-worker/keys.env)"); process.exit(2); }
+  // A run stopped by a rejected key: nothing to resume it with until the key is fixed; never call the API with it.
+  if (existsSync(resolve(run.dir, "key-rejected.json"))) {
+    const kr = JSON.parse(readFileSync(resolve(run.dir, "key-rejected.json"), "utf8"));
+    console.error(`key rejected by IndicStack (HTTP ${kr.status}: ${(kr.error || "").slice(0, 160)}) — the saved key is invalid or the account has no credit.`);
+    console.error("Fix the key (scripts/key.mjs) or top up the account, then re-run. To start the same run over, delete the run dir or its key-rejected.json.");
+    process.exit(DEFAULTS.breaker_exit_code + 1);
+  }
   const cal = readCalibration(arm, cfg.model);
   const probe = readProbe(arm);
   if (cal) updateMeta(run.dir, { calibration: { at: cal.at, n: cal.n, speed_tps_p10: cal.speed_tps_p10, answer_tokens_p95: cal.answer_tokens_p95 } });
@@ -156,7 +172,7 @@ async function main() {
   const status = new Map([...latestByKey(p.tickets, (r) => r.ticket)].map(([k, v]) => [k, v.status]));
   // resume: queued tickets (planner fixed their test, or a dependency now passes) go back to the worker; ok tickets stay done
   if (existing) for (const [k, s] of status) if (s === "queued") status.delete(k);
-  let breaker = false;
+  let breaker = false, keyRejected = false;
   const running = new Map();
   const ready = () => tickets.filter((t) => !status.has(t.id) || status.get(t.id) === "failed").filter((t) => !running.has(t.id)).filter((t) => t.deps.every((d) => status.get(d) === "ok"));
   const blocked = () => tickets.filter((t) => !status.has(t.id)).filter((t) => t.deps.some((d) => status.get(d) === "queued" || status.get(d) === "breaker"));
@@ -165,11 +181,13 @@ async function main() {
     const next = ready();
     if (!next.length && !running.size) break;
     for (const t of next) {
-      running.set(t.id, runTicket({ ticket: t, arm, cfg, cal, probe, p, apiKey, limiter, state }).then((r) => { status.set(t.id, r.status); running.delete(t.id); if (r.status === "breaker") breaker = true; return r; }));
+      running.set(t.id, runTicket({ ticket: t, arm, cfg, cal, probe, p, apiKey, limiter, state }).then((r) => { status.set(t.id, r.status); running.delete(t.id); if (r.status === "breaker") breaker = true; if (r.status === "key_rejected") keyRejected = true; return r; }));
     }
     if (running.size) await Promise.race(running.values());
+    if (keyRejected) break;
   }
   await Promise.allSettled(running.values());
+  if (keyRejected) { updateMeta(run.dir, { status: "key_rejected", keyRejectedAt: new Date().toISOString() }); process.exit(DEFAULTS.breaker_exit_code + 1); }
   if (breaker) { updateMeta(run.dir, { status: "breaker", breakerAt: new Date().toISOString() }); process.exit(DEFAULTS.breaker_exit_code); }
   const queued = [...status.values()].filter((s) => s === "queued").length;
   updateMeta(run.dir, { status: queued ? "needs_claude" : "done", finished: new Date().toISOString(), testsFinal: finalTestCount(run.dir), limiterHistory: limiter.history });

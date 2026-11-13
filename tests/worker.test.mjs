@@ -57,6 +57,33 @@ test("429 x6: credit breaker exits with the distinct code and saves state", asyn
   assert.equal(r.status, 75);
   assert.equal(meta.status, "breaker");
 });
+test("401: the run stops, nothing is queued, exit 76, marker written", async () => {
+  const { r, runDir, queue, meta } = await runWorker("http401", "http401");
+  assert.equal(r.status, 76, r.stderr);
+  assert.equal(meta.status, "key_rejected");
+  assert.ok(existsSync(resolve(runDir, "key-rejected.json")));
+  assert.ok(JSON.parse(readFileSync(resolve(runDir, "key-rejected.json"), "utf8")).status === 401);
+  assert.equal(queue.length, 0, `a dead key must not queue tickets: ${JSON.stringify(queue)}`);
+  // every call was rejected; none retried, none queued for the planner
+  assert.ok(readJsonl(resolve(runDir, "calls.jsonl")).every((c) => c.http_status === 401));
+});
+test("401 mid-run: the run stops, the earlier ok ticket is kept, nothing queued", async () => {
+  // the stub answers the first call (ticket 1, concurrency 1) and rejects every call after it
+  const { r, runDir, queue, tickets } = await runWorker("ok-then-401", "okthen401", { concurrency: 1 });
+  assert.equal(r.status, 76, r.stderr);
+  // every in-flight ticket answered before the stop reached them; none of the queued reasons may be an HTTP error
+  assert.ok(queue.every((q) => !/HTTP \d/.test(q.reason)), `a dead key must not queue tickets: ${JSON.stringify(queue)}`);
+  const latest = new Map(tickets.map((t) => [t.ticket, t]));
+  const t1 = latest.get(1) || {};
+  assert.equal(t1.status, "ok", `ticket 1 passed its test before the key died and stays done; t1=${JSON.stringify(t1)}; tickets=${JSON.stringify(tickets)}`);
+  assert.ok(readJsonl(resolve(runDir, "calls.jsonl")).some((c) => c.kind === "ok") && readJsonl(resolve(runDir, "calls.jsonl")).some((c) => c.http_status === 401), "an ok answer and a 401 are both recorded");
+  // resuming the stopped run with the same dead key makes no calls and exits 76 again
+  const stateDir = resolve(tmpRuns, `state-okthen401`);
+  const again = await spawnAsync(["worker.mjs", "--arm", "A", "--run", runDir], { ...process.env, IS_WORKER_API_KEY: "test", IS_WORKER_STATE_DIR: stateDir, IS_WORKER_TEST_FAST: "1" });
+  assert.equal(again.status, 76, again.stderr);
+  const rejectedAt = JSON.parse(readFileSync(resolve(runDir, "key-rejected.json"), "utf8")).at;
+  assert.ok(!readJsonl(resolve(runDir, "calls.jsonl")).some((c) => c.ts > rejectedAt), "no API calls after the key rejection");
+});
 test("flaky 503 then ok: resend is safe", async () => {
   const { calls, queue } = await runWorker("flaky", "flaky", { concurrency: 1 });
   assert.equal(calls[0].kind, "http_5xx"); assert.equal(calls[1].kind, "http_5xx");
