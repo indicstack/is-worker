@@ -455,9 +455,12 @@ async function build() {
   const spec = String(args.spec || resolve(pwr, "expand.json"));
   let expandStatus = null;
   const { findStubs } = await import("./stubs.mjs");
-  const stubCount = findStubs(resolve(project, String(args.dir || "src"))).length;
+  // Default to src/ (the documented layout) but fall back to the project root when there is no src/, so a
+  // root-level project is checked too instead of crashing or being silently skipped. An explicit --dir wins.
+  const dir = args.dir ? String(args.dir) : (existsSync(resolve(project, "src")) ? "src" : ".");
+  const stubCount = findStubs(resolve(project, dir)).length;
   // Stubs are filled and tested as plain JavaScript only; say so instead of skipping TypeScript stubs silently.
-  const tsStubs = (function walk(d, out = []) { if (!existsSync(d)) return out; for (const e of readdirSync(d, { withFileTypes: true })) { if (e.name.startsWith(".") || e.name === "node_modules") continue; const f = resolve(d, e.name); if (e.isDirectory()) walk(f, out); else if (/\.(ts|tsx|jsx)$/.test(e.name) && /\/\/\s*@qwen\b/.test(readFileSync(f, "utf8"))) out.push(f); } return out; })(resolve(project, String(args.dir || "src")));
+  const tsStubs = (function walk(d, out = []) { if (!existsSync(d)) return out; for (const e of readdirSync(d, { withFileTypes: true })) { if (e.name.startsWith(".") || e.name === "node_modules") continue; const f = resolve(d, e.name); if (e.isDirectory()) walk(f, out); else if (/\.(ts|tsx|jsx)$/.test(e.name) && /\/\/\s*@qwen\b/.test(readFileSync(f, "utf8"))) out.push(f); } return out; })(resolve(project, dir));
   if (tsStubs.length) say(`warning: ${tsStubs.length} @qwen stub(s) in .ts/.tsx/.jsx files are not filled (stubs are plain .js/.mjs only): put them in .is-worker/chunks.json as whole-file chunks instead`);
   const chunkSpec = resolve(pwr, "chunks.json");
   if (!args["verify-only"] && (stubCount || existsSync(spec) || existsSync(chunkSpec))) {
@@ -477,12 +480,12 @@ async function build() {
     }
     // Stub route first (0.10.1B): qwen fills every file marked // @qwen, tested against its own stub.
     if (stubCount) {
-      const st = node("scripts/stubs.mjs", ["--dir", String(args.dir || "src"), ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
+      const st = node("scripts/stubs.mjs", ["--dir", dir, ...(args.verbose ? ["--verbose"] : [])], { env: { IS_WORKER_API_KEY: key } }).status;
       if (st === 76) die(keyRejectedDie());
       if (st === 1) expandStatus = 1;
       if (st === 2) die("build stopped: stub filling could not start (see above)");
       // Never report success over unfilled stubs: the 0.10.2 Windows bug filled 0 and still committed.
-      const still = findStubs(resolve(project, String(args.dir || "src"))).length;
+      const still = findStubs(resolve(project, dir)).length;
       if (still === stubCount) die(`build stopped: the worker filled 0 of ${stubCount} @qwen stub(s); nothing was committed. Run with --verbose, or fill them yourself and run build --verify-only.`);
       if (still) { say(`${still} of ${stubCount} @qwen stub(s) are still unfilled (listed above).`); expandStatus = 1; }
     }
@@ -493,7 +496,7 @@ async function build() {
       if (es === 1) expandStatus = 1;
     }
   }
-  const v = verify(project, String(args.dir || "src"));
+  const v = verify(project, dir);
   say(`verify: ${v.files} module(s); syntax errors ${v.syntax.length}; imported ${v.imported}${v.browserOnly.length ? `; browser-only ${v.browserOnly.length} (${v.browserOnly.map((x) => x.file).join(", ")})` : ""}; failed ${v.failed.length}`);
   for (const x of [...v.syntax, ...v.failed]) say(`  ✗ ${x.file}: ${x.error}`);
   if (args["target-kb"]) {
