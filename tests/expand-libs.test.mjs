@@ -113,6 +113,14 @@ test("verify separates syntax errors, browser-only modules and real import failu
   assert.ok(v.failed.some((x) => x.file === "src/bad.mjs")); assert.equal(v.ok, false);
 });
 
+test("verify does not crash when the src directory is absent (code at the project root)", async () => {
+  const { verify } = await import("../lib/verify.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "verify-nosrc-"));
+  writeFileSync(join(dir, "main.mjs"), "export const a = 1;");   // no src/ at all
+  const v = verify(dir);                                          // used to throw ENOENT scandir '.../src'
+  assert.equal(v.files, 0); assert.equal(v.ok, true);
+});
+
 test("economizer gate answers no-change before a repository has history", () => {
   const dir = mkdtempSync(join(tmpdir(), "gate-"));
   const hook = new URL("../economizer/scripts/te-hook", import.meta.url).pathname;
